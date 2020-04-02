@@ -1,4 +1,4 @@
-use crate::usb::{self, UsbKind};
+use crate::usb;
 use anyhow::*;
 use gio::prelude::*;
 use gtk::prelude::*;
