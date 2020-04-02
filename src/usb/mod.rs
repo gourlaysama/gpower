@@ -17,6 +17,7 @@ pub struct UsbDevice {
     product_name: Option<String>,
     manufacturer_name: Option<String>,
     autosuspend: bool,
+    delay: u64,
 }
 
 impl UsbDevice {
@@ -31,6 +32,7 @@ impl UsbDevice {
             product_name: None,
             manufacturer_name: None,
             autosuspend: false,
+            delay: 0,
         }
     }
 
@@ -82,6 +84,10 @@ impl UsbDevice {
     pub fn can_autosuspend(&self) -> bool {
         self.autosuspend
     }
+
+    pub fn delay(&self) -> u64 {
+        self.delay
+    }
 }
 
 pub fn list_devices() -> Result<Vec<UsbDevice>> {
@@ -127,6 +133,7 @@ fn make_device(
     let product_name_path = char_path.join("product");
     let class_path = char_path.join("bDeviceClass");
     let control = char_path.join("power/control");
+    let autosuspend_delay = char_path.join("power/autosuspend_delay_ms");
 
     let mut usb_device = UsbDevice::from(char_path);
 
@@ -162,6 +169,14 @@ fn make_device(
         _ => false,
     };
     usb_device.autosuspend = autosuspend;
+
+    match fs::read_to_string(&autosuspend_delay)?
+        .trim()
+        .parse::<i64>()?
+    {
+        -1 => usb_device.autosuspend = false,
+        i => usb_device.delay = i as u64,
+    }
 
     Ok(usb_device)
 }

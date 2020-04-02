@@ -3,6 +3,7 @@ use anyhow::*;
 use gio::prelude::*;
 use gtk::prelude::*;
 use gtk_macros::*;
+use std::time::Duration;
 
 pub struct Application {
     app: gtk::Application,
@@ -88,7 +89,18 @@ fn build_usb_entry(device: &usb::UsbDevice) -> gtk::ListBoxRow {
     let cb_box = gtk::ComboBoxText::new_with_entry();
     cb_box.set_valign(gtk::Align::Center);
     cb_box.append_text("Immediately");
-    cb_box.set_active(Some(0));
+    let delay = device.delay();
+    let autosuspend = device.can_autosuspend();
+    if !autosuspend {
+        cb_box.set_sensitive(false);
+    }
+    if delay == 0 {
+        cb_box.set_active(Some(0));
+    } else if autosuspend {
+        cb_box.append_text(&humantime::format_duration(Duration::from_millis(delay)).to_string());
+        cb_box.set_active(Some(1));
+    }
+
     cb_box.append_text("1 second");
     cb_box.append_text("2 seconds");
     cb_box.append_text("5 seconds");
