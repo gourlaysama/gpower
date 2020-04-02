@@ -1,66 +1,59 @@
-use crate::usb;
-use anyhow::*;
-use gio::prelude::*;
+use crate::usb::{self, UsbDevice};
+use gio::prelude::ApplicationExtManual;
+use gio::subclass::prelude::ApplicationImpl;
+use glib::subclass::{self, prelude::*};
+use glib::translate::*;
+use glib::*;
+use glib::{MainContext, Receiver, Sender};
 use gtk::prelude::*;
+use gtk::subclass::application::GtkApplicationImpl;
 use gtk_macros::*;
+use std::cell::RefCell;
 use std::time::Duration;
 
-pub struct Application {
-    app: gtk::Application,
+pub enum Action {}
+
+pub struct GPInnerApplication {
+    sender: Sender<Action>,
+    receiver: Receiver<Action>,
+    state: RefCell<Vec<UsbDevice>>,
 }
 
-impl Application {
-    pub fn new() -> Result<Application> {
-        let app = gtk::Application::new(
-            Some("net.gourlaysama.gpower-tweaks"),
-            gio::ApplicationFlags::default(),
-        )?;
-        app.connect_activate(|app| {
-            let provider = gtk::CssProvider::new();
-            provider
-                .load_from_data(include_bytes!("../data/ui/shell.css"))
-                .unwrap();
-            gtk::StyleContext::add_provider_for_screen(
-                &gdk::Screen::get_default().unwrap(),
-                &provider,
-                gtk::STYLE_PROVIDER_PRIORITY_USER,
-            );
-            let builder = gtk::Builder::new_from_string(include_str!("../data/ui/window.ui"));
-            get_widget!(builder, gtk::ApplicationWindow, win);
-            get_widget!(builder, gtk::ListBox, category_list);
-            let label = gtk::Label::new_with_mnemonic(Some("_USB Autosuspend"));
-            label.set_margin_top(6);
-            label.set_margin_bottom(6);
-            label.set_margin_start(6);
-            label.set_margin_end(6);
-            let row = gtk::ListBoxRow::new();
-            row.add(&label);
-            category_list.add(&row);
-            // let label = gtk::Label::new_with_mnemonic(Some("_PCI Runtime Management"));
-            // label.set_margin_top(6);
-            // label.set_margin_bottom(6);
-            // label.set_margin_start(6);
-            // label.set_margin_end(6);
-            // let row = gtk::ListBoxRow::new();
-            // row.add(&label);
-            // category_list.add(&row);
-            get_widget!(builder, gtk::ListBox, main_list_box);
-            let mut entries = Vec::new();
-            for d in usb::list_devices().unwrap() {
-                entries.push(build_usb_entry(&d));
-            }
-            for e in entries {
-                main_list_box.add(&e);
-            }
-            win.set_application(Some(app));
-            win.show_all();
-        });
+impl ObjectSubclass for GPInnerApplication {
+    const NAME: &'static str = "GPInnerApplication";
+    type ParentType = gtk::Application;
+    type Instance = subclass::simple::InstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
 
-        Ok(Application { app })
+    glib_object_subclass!();
+
+    fn new() -> Self {
+        let state = RefCell::new(usb::list_devices().unwrap());
+
+        let (sender, receiver) = MainContext::channel(glib::PRIORITY_DEFAULT);
+
+        Self {
+            sender,
+            receiver,
+            state,
+        }
     }
+}
 
-    pub fn run(&self) {
-        self.app.run(&std::env::args().collect::<Vec<_>>());
+impl ObjectImpl for GPInnerApplication {
+    glib::glib_object_impl!();
+}
+
+impl GtkApplicationImpl for GPInnerApplication {}
+
+impl ApplicationImpl for GPInnerApplication {
+    fn activate(&self, _: &gio::Application) {
+        let outer_app = ObjectSubclass::get_instance(self)
+            .downcast::<GPApplication>()
+            .unwrap();
+        let win = outer_app.create_window();
+
+        win.show_all();
     }
 }
 
@@ -112,4 +105,69 @@ fn build_usb_entry(device: &usb::UsbDevice) -> gtk::ListBoxRow {
 
     row.add(&main_box);
     row
+}
+
+glib::glib_wrapper! {
+    pub struct GPApplication(
+        Object<subclass::simple::InstanceStruct<GPInnerApplication>,
+        subclass::simple::ClassStruct<GPInnerApplication>,
+        GPApplicationClass>
+    ) @extends gio::Application, gtk::Application;
+
+    match fn {
+        get_type => || GPInnerApplication::get_type().to_glib(),
+    }
+}
+
+impl GPApplication {
+    pub fn run() {
+        let app = glib::Object::new(
+            GPApplication::static_type(),
+            &[
+                ("application-id", &Some("net.gourlaysama.gpower-tweaks")),
+                ("flags", &gio::ApplicationFlags::default()),
+            ],
+        )
+        .unwrap()
+        .downcast::<GPApplication>()
+        .unwrap();
+
+        ApplicationExtManual::run(&app, &std::env::args().collect::<Vec<_>>());
+    }
+
+    fn create_window(&self) -> gtk::ApplicationWindow {
+        let inner = GPInnerApplication::from_instance(self);
+
+        let provider = gtk::CssProvider::new();
+        provider
+            .load_from_data(include_bytes!("../data/ui/shell.css"))
+            .unwrap();
+        gtk::StyleContext::add_provider_for_screen(
+            &gdk::Screen::get_default().unwrap(),
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_USER,
+        );
+        let builder = gtk::Builder::new_from_string(include_str!("../data/ui/window.ui"));
+        get_widget!(builder, gtk::ApplicationWindow, win);
+        win.set_application(Some(self));
+        get_widget!(builder, gtk::ListBox, category_list);
+        let label = gtk::Label::new_with_mnemonic(Some("_USB Autosuspend"));
+        label.set_margin_top(6);
+        label.set_margin_bottom(6);
+        label.set_margin_start(6);
+        label.set_margin_end(6);
+        let row = gtk::ListBoxRow::new();
+        row.add(&label);
+        category_list.add(&row);
+        get_widget!(builder, gtk::ListBox, main_list_box);
+        let mut entries = Vec::new();
+        for d in inner.state.borrow().iter() {
+            entries.push(build_usb_entry(&d));
+        }
+        for e in entries {
+            main_list_box.add(&e);
+        }
+
+        win
+    }
 }

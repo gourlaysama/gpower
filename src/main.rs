@@ -1,12 +1,10 @@
 use anyhow::*;
-use gpower_tweaks::app::Application;
+use gpower_tweaks::app::GPApplication;
 
 fn main() -> Result<()> {
     gtk::init()?;
 
-    let app = Application::new()?;
-
-    app.run();
+    GPApplication::run();
 
     Ok(())
 }

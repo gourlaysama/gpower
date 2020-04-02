@@ -18,7 +18,7 @@ pub struct UsbDevice {
     manufacturer_name: Option<String>,
     autosuspend: bool,
     delay: u64,
-    kind: UsbKind
+    kind: UsbKind,
 }
 
 impl UsbDevice {
@@ -33,7 +33,7 @@ impl UsbDevice {
             manufacturer_name: None,
             autosuspend: false,
             delay: 0,
-            kind: UsbKind::Unknown
+            kind: UsbKind::Unknown,
         }
     }
 
@@ -105,7 +105,7 @@ impl UsbKind {
     fn from_device_class(class: u16) -> UsbKind {
         match class {
             9 => UsbKind::Hub,
-            _ => UsbKind::Unknown
+            _ => UsbKind::Unknown,
         }
     }
 }
