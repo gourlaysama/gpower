@@ -8,14 +8,18 @@ use glib::{MainContext, Receiver, Sender};
 use gtk::prelude::*;
 use gtk::subclass::application::GtkApplicationImpl;
 use gtk_macros::*;
+use log::*;
 use std::cell::RefCell;
 use std::time::Duration;
 
-pub enum Action {}
+#[derive(Clone, Debug)]
+pub enum Action {
+    SetAutoSuspend(u32, bool),
+}
 
 pub struct GPInnerApplication {
     sender: Sender<Action>,
-    receiver: Receiver<Action>,
+    receiver: RefCell<Option<Receiver<Action>>>,
     state: RefCell<Vec<UsbDevice>>,
 }
 
@@ -34,7 +38,7 @@ impl ObjectSubclass for GPInnerApplication {
 
         Self {
             sender,
-            receiver,
+            receiver: RefCell::new(Some(receiver)),
             state,
         }
     }
@@ -54,10 +58,16 @@ impl ApplicationImpl for GPInnerApplication {
         let win = outer_app.create_window();
 
         win.show_all();
+
+        self.receiver
+            .borrow_mut()
+            .take()
+            .unwrap()
+            .attach(None, move |action| outer_app.process_action(action));
     }
 }
 
-fn build_usb_entry(device: &usb::UsbDevice) -> gtk::ListBoxRow {
+fn build_usb_entry(device: &usb::UsbDevice, app: &GPInnerApplication) -> gtk::ListBoxRow {
     let row = gtk::ListBoxRow::new();
     row.set_activatable(false);
     row.set_selectable(false);
@@ -78,6 +88,12 @@ fn build_usb_entry(device: &usb::UsbDevice) -> gtk::ListBoxRow {
 
     let button = gtk::Switch::new();
     button.set_active(device.can_autosuspend());
+    let id = device.get_id();
+    button.connect_state_set(clone!(@strong app.sender as sender => move |_, on| {
+        send!(sender, Action::SetAutoSuspend(id, on));
+        glib::signal::Inhibit(false)
+    }
+    ));
     main_box.add(&button);
 
     let cb_box = gtk::ComboBoxText::new_with_entry();
@@ -102,6 +118,15 @@ fn build_usb_entry(device: &usb::UsbDevice) -> gtk::ListBoxRow {
     cb_box.append_text("1 minute");
     cb_box.append_text("5 minutes");
     main_box.add(&cb_box);
+
+    button
+        .bind_property("active", &cb_box, "sensitive")
+        .flags(
+            glib::BindingFlags::DEFAULT
+                | glib::BindingFlags::SYNC_CREATE
+                | glib::BindingFlags::BIDIRECTIONAL,
+        )
+        .build();
 
     row.add(&main_box);
     row
@@ -162,12 +187,29 @@ impl GPApplication {
         get_widget!(builder, gtk::ListBox, main_list_box);
         let mut entries = Vec::new();
         for d in inner.state.borrow().iter() {
-            entries.push(build_usb_entry(&d));
+            entries.push(build_usb_entry(&d, inner));
         }
         for e in entries {
             main_list_box.add(&e);
         }
 
         win
+    }
+
+    fn process_action(&self, action: Action) -> glib::Continue {
+        let inner = GPInnerApplication::from_instance(self);
+
+        match action {
+            Action::SetAutoSuspend(id, autosuspend) => {
+                let mut devices = inner.state.borrow_mut();
+                for d in devices.iter_mut() {
+                    if d.get_id() == id {
+                        d.set_autosuspend(autosuspend);
+                    }
+                }
+            }
+        }
+
+        glib::Continue(true)
     }
 }

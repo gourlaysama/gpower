@@ -17,4 +17,5 @@ glib = "0.9"
 gtk = { version = "0.8", features = ["v3_22"] }
 gtk-macros = "0.2"
 humantime = "2"
+log = "0.4"
 nom = "5"

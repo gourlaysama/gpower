@@ -9,6 +9,7 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct UsbDevice {
+    id: u32,
     char_device_path: PathBuf,
     vendor_id: Option<u32>,
     product_id: Option<u32>,
@@ -22,8 +23,9 @@ pub struct UsbDevice {
 }
 
 impl UsbDevice {
-    fn from(char_device_path: PathBuf) -> UsbDevice {
+    fn from(char_device_path: PathBuf, id: u32) -> UsbDevice {
         UsbDevice {
+            id,
             char_device_path,
             vendor_id: None,
             product_id: None,
@@ -35,6 +37,10 @@ impl UsbDevice {
             delay: 0,
             kind: UsbKind::Unknown,
         }
+    }
+
+    pub fn get_id(&self) -> u32 {
+        self.id
     }
 
     pub fn get_name(&self) -> String {
@@ -92,6 +98,10 @@ impl UsbDevice {
 
     pub fn kind(&self) -> UsbKind {
         self.kind
+    }
+
+    pub fn set_autosuspend(&mut self, autosuspend: bool) {
+        self.autosuspend = autosuspend;
     }
 }
 
@@ -154,8 +164,8 @@ fn make_device(
     let class_path = char_path.join("bDeviceClass");
     let control = char_path.join("power/control");
     let autosuspend_delay = char_path.join("power/autosuspend_delay_ms");
-
-    let mut usb_device = UsbDevice::from(char_path);
+    let id = major as u32 | ((minor as u32) << 16);
+    let mut usb_device = UsbDevice::from(char_path, id);
 
     if let Ok(vendor) = fs::read_to_string(&vendor_path) {
         let vendor_id = u32::from_str_radix(&vendor.trim(), 16)?;
