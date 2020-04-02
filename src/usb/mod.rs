@@ -16,6 +16,7 @@ pub struct UsbDevice {
     db_product_name: Option<String>,
     product_name: Option<String>,
     manufacturer_name: Option<String>,
+    autosuspend: bool,
 }
 
 impl UsbDevice {
@@ -29,18 +30,27 @@ impl UsbDevice {
             db_product_name: None,
             product_name: None,
             manufacturer_name: None,
+            autosuspend: false,
         }
     }
 
     pub fn get_name(&self) -> String {
         let mut desc = String::new();
-        if let Some(vendor) = self.db_vendor_name.as_ref().or_else(|| self.manufacturer_name.as_ref()) {
+        if let Some(vendor) = self
+            .db_vendor_name
+            .as_ref()
+            .or_else(|| self.manufacturer_name.as_ref())
+        {
             desc.push_str(&vendor);
             desc.push(' ');
         }
-        if let Some(product) = self.db_product_name.as_ref().or_else(|| self.product_name.as_ref()) {
+        if let Some(product) = self
+            .db_product_name
+            .as_ref()
+            .or_else(|| self.product_name.as_ref())
+        {
             desc.push_str(&product);
-        } else if let Some(9) = self.device_class  {
+        } else if let Some(9) = self.device_class {
             desc.push_str("Hub");
         }
 
@@ -67,6 +77,10 @@ impl UsbDevice {
         }
 
         desc
+    }
+
+    pub fn can_autosuspend(&self) -> bool {
+        self.autosuspend
     }
 }
 
@@ -112,6 +126,7 @@ fn make_device(
     let product_path = char_path.join("idProduct");
     let product_name_path = char_path.join("product");
     let class_path = char_path.join("bDeviceClass");
+    let control = char_path.join("power/control");
 
     let mut usb_device = UsbDevice::from(char_path);
 
@@ -140,6 +155,13 @@ fn make_device(
             usb_device.device_class = Some(class_id);
         }
     }
+
+    let autosuspend = match fs::read_to_string(&control)?.trim() {
+        "on" => false,
+        "auto" => true,
+        _ => false,
+    };
+    usb_device.autosuspend = autosuspend;
 
     Ok(usb_device)
 }

@@ -74,9 +74,7 @@ fn parse_file(input: &str) -> IResult<&str, HashMap<u32, Vendor>> {
 }
 
 pub fn parse_all(input: &str) -> Result<HashMap<u32, Vendor>> {
-    let (_, vendors) = parse_file(input).map_err(|e| {
-        anyhow!("failed to parse file {}", e)
-    })?;
+    let (_, vendors) = parse_file(input).map_err(|e| anyhow!("failed to parse file {}", e))?;
 
     Ok(vendors)
 }

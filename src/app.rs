@@ -1,5 +1,5 @@
-use anyhow::*;
 use crate::usb;
+use anyhow::*;
 use gio::prelude::*;
 use gtk::prelude::*;
 use gtk_macros::*;
@@ -63,7 +63,6 @@ impl Application {
     }
 }
 
-
 fn build_usb_entry(device: &usb::UsbDevice) -> gtk::ListBoxRow {
     let row = gtk::ListBoxRow::new();
     row.set_activatable(false);
@@ -83,6 +82,7 @@ fn build_usb_entry(device: &usb::UsbDevice) -> gtk::ListBoxRow {
     main_box.pack_start(&text_box, true, true, 0);
 
     let button = gtk::Switch::new();
+    button.set_active(device.can_autosuspend());
     main_box.add(&button);
 
     let cb_box = gtk::ComboBoxText::new_with_entry();
