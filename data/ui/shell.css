@@ -1,0 +1,25 @@
+/*.list_box row:hover {
+    background-color: #3f4455;
+}*/
+
+.list_box {
+    margin: 12px;
+    padding: 3px;
+    /*    background-color: rgba(0,0,0,0);*/
+    border: 1px solid rgb(27, 27, 27);
+}
+
+.list_box row {
+    padding: 3px;
+    /*background-color: #404552;*/
+    border-bottom: 1px solid rgb(50, 50, 50);
+}
+
+.list_box row:last-child {
+    border-bottom: none;
+}
+
+.desc_label {
+    font-size: 12px;
+    color: rgb(144, 144, 144);
+}

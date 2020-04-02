@@ -1,0 +1,20 @@
+[package]
+name = "gpower-tweaks"
+version = "0.1.0-dev"
+authors = ["Antoine Gourlay <antoine@gourlay.fr>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+cairo-rs = "0.8"
+encoding_rs = "0.8"
+gdk = "0.12"
+gdk-pixbuf = { version = "0.8", features = ["v2_36"]}
+gio = { version = "0.8", features = ["v2_46"]}
+glib = "0.9"
+gtk = { version = "0.8", features = ["v3_22"] }
+gtk-macros = "0.2"
+humantime = "2"
+nom = "5"
