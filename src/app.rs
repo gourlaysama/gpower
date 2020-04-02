@@ -1,4 +1,4 @@
-use crate::usb;
+use crate::usb::{self, UsbKind};
 use anyhow::*;
 use gio::prelude::*;
 use gtk::prelude::*;
@@ -70,9 +70,6 @@ fn build_usb_entry(device: &usb::UsbDevice) -> gtk::ListBoxRow {
     row.set_selectable(false);
     let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
 
-    let image = gtk::Image::new_from_icon_name(Some("input-mouse"), gtk::IconSize::Dialog);
-    main_box.add(&image);
-
     let text_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let label_main = gtk::Label::new(Some(&device.get_name()));
     let label_info = gtk::Label::new(Some(&device.get_description()));
@@ -80,6 +77,10 @@ fn build_usb_entry(device: &usb::UsbDevice) -> gtk::ListBoxRow {
     text_box.add(&label_main);
     text_box.add(&label_info);
     text_box.set_valign(gtk::Align::Center);
+    text_box.set_halign(gtk::Align::Start);
+    text_box.set_spacing(3);
+    label_info.set_halign(gtk::Align::Start);
+    label_main.set_halign(gtk::Align::Start);
     main_box.pack_start(&text_box, true, true, 0);
 
     let button = gtk::Switch::new();

@@ -7,17 +7,18 @@ use std::fs;
 use std::os::linux::fs::*;
 use std::path::PathBuf;
 
+#[derive(Debug)]
 pub struct UsbDevice {
     char_device_path: PathBuf,
     vendor_id: Option<u32>,
     product_id: Option<u32>,
-    device_class: Option<u16>,
     db_vendor_name: Option<String>,
     db_product_name: Option<String>,
     product_name: Option<String>,
     manufacturer_name: Option<String>,
     autosuspend: bool,
     delay: u64,
+    kind: UsbKind
 }
 
 impl UsbDevice {
@@ -26,13 +27,13 @@ impl UsbDevice {
             char_device_path,
             vendor_id: None,
             product_id: None,
-            device_class: None,
             db_vendor_name: None,
             db_product_name: None,
             product_name: None,
             manufacturer_name: None,
             autosuspend: false,
             delay: 0,
+            kind: UsbKind::Unknown
         }
     }
 
@@ -52,7 +53,7 @@ impl UsbDevice {
             .or_else(|| self.product_name.as_ref())
         {
             desc.push_str(&product);
-        } else if let Some(9) = self.device_class {
+        } else if let UsbKind::Hub = self.kind {
             desc.push_str("Hub");
         }
 
@@ -87,6 +88,25 @@ impl UsbDevice {
 
     pub fn delay(&self) -> u64 {
         self.delay
+    }
+
+    pub fn kind(&self) -> UsbKind {
+        self.kind
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum UsbKind {
+    Hub,
+    Unknown,
+}
+
+impl UsbKind {
+    fn from_device_class(class: u16) -> UsbKind {
+        match class {
+            9 => UsbKind::Hub,
+            _ => UsbKind::Unknown
+        }
     }
 }
 
@@ -159,7 +179,7 @@ fn make_device(
 
     if let Ok(class_str) = fs::read_to_string(&class_path) {
         if let Ok(class_id) = u16::from_str_radix(class_str.trim(), 16) {
-            usb_device.device_class = Some(class_id);
+            usb_device.kind = UsbKind::from_device_class(class_id);
         }
     }
 
