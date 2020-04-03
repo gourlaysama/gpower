@@ -3,6 +3,7 @@ mod db;
 use crate::fs::write_string_privileged;
 use anyhow::*;
 use db::parse_all;
+use log::*;
 use std::collections::HashMap;
 use std::fs;
 use std::os::linux::fs::*;
@@ -120,6 +121,13 @@ impl UsbDevice {
         };
         let autosuspend_delay_text = self.delay.to_string();
 
+        trace!(
+            "saving '{}' with ({}, {})",
+            self.char_device_path.to_string_lossy(),
+            control_text,
+            autosuspend_delay_text
+        );
+
         write_string_privileged(&control_path, control_text)?;
         write_string_privileged(&autosuspend_delay_path, autosuspend_delay_text)?;
 
@@ -142,28 +150,43 @@ impl UsbKind {
     }
 }
 
+macro_rules! match_warn {
+    ($content:expr, $format:expr, $bind:ident => $func:block) => {
+        match $content {
+            Err(e) => warn!($format, e),
+            Ok($bind) => $func,
+        }
+    };
+}
+
 pub fn list_devices() -> Result<Vec<UsbDevice>> {
     let db = make_usb_db()
         .map_err(|e| {
-            eprintln!("Ignoring error parting db: {}", e);
+            warn!("Ignoring error parting db: {}", e);
         })
         .ok();
+
+    debug!("listing usb devices");
 
     let mut devices = Vec::new();
 
     for entry in std::fs::read_dir("/dev/bus/usb/")? {
-        if let Ok(entry) = entry {
-            if let Ok(tpe) = entry.file_type() {
+        match_warn!(entry, "ignoring error while enumerating devices: {}", entry => {
+            match_warn!(entry.file_type(), "ignoring error getting type: {}", tpe => {
                 if tpe.is_dir() {
-                    for entry in entry.path().read_dir()? {
-                        if let Ok(entry) = entry {
-                            let dev = make_device(entry, db.as_ref())?;
-                            devices.push(dev);
+                    match_warn!(entry.path().read_dir(), "ignoring error enumerating device: {}", dir => {
+                        for entry in dir {
+                            match_warn!(entry, "ignoring error enumerating device: {}", entry => {
+                                let dev = make_device(entry, db.as_ref());
+                                match_warn!(dev, "ignoring error reading device: {}", dev => {
+                                    devices.push(dev);
+                                });
+                            });
                         }
-                    }
+                    });
                 }
-            }
-        }
+            });
+        });
     }
 
     Ok(devices)
@@ -234,6 +257,7 @@ fn make_device(
 }
 
 fn make_usb_db() -> Result<HashMap<u32, db::Vendor>> {
+    debug!("parsing usb product db");
     let db_content = std::fs::read("/usr/share/hwdata/usb.ids")?;
     let (db_str, _, _) = encoding_rs::WINDOWS_1252.decode(&db_content);
 

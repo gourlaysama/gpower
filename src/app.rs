@@ -44,6 +44,7 @@ impl State {
 
 impl GPInnerApplication {
     fn set_changed(&self) {
+        trace!("marking state as changed");
         let mut state = self.state.borrow_mut();
 
         let builder = self.builder.borrow();
@@ -62,6 +63,7 @@ impl ObjectSubclass for GPInnerApplication {
     glib_object_subclass!();
 
     fn new() -> Self {
+        debug!("initializing GPInnerApplication");
         let state = State::new(usb::list_devices().unwrap());
 
         let (sender, receiver) = MainContext::channel(glib::PRIORITY_DEFAULT);
@@ -83,6 +85,7 @@ impl GtkApplicationImpl for GPInnerApplication {}
 
 impl ApplicationImpl for GPInnerApplication {
     fn activate(&self, _: &gio::Application) {
+        debug!("activating GPInnerApplication");
         let outer_app = ObjectSubclass::get_instance(self)
             .downcast::<GPApplication>()
             .unwrap();
@@ -112,6 +115,7 @@ glib_wrapper! {
 
 impl GPApplication {
     pub fn run() {
+        debug!("running GPApplication");
         let app = glib::Object::new(
             GPApplication::static_type(),
             &[
@@ -127,6 +131,7 @@ impl GPApplication {
     }
 
     fn create_window(&self) -> gtk::ApplicationWindow {
+        debug!("creating main window");
         let inner = GPInnerApplication::from_instance(self);
 
         let provider = gtk::CssProvider::new();
@@ -144,6 +149,7 @@ impl GPApplication {
 
         get_widget!(builder, gtk::AboutDialog, about_dialog);
         action!(win, "about", move |_, _| {
+            debug!("showing about dialog");
             about_dialog.show_all();
         });
 
@@ -250,6 +256,8 @@ impl GPApplication {
     }
 
     fn set_error(&self, cb: &gtk::ComboBoxText, error: Option<&str>) {
+        debug!("setting error state to '{}'", error.is_some());
+
         let inner = GPInnerApplication::from_instance(self);
         let context = cb.get_style_context();
 
@@ -276,6 +284,8 @@ impl GPApplication {
     }
 
     fn process_action(&self, action: Action) -> glib::Continue {
+        trace!("processing action: {:?}", action);
+
         let inner = GPInnerApplication::from_instance(self);
 
         match action {
@@ -306,6 +316,16 @@ impl GPApplication {
 
                 inner.set_changed();
             }
+        }
+
+        if log_enabled!(Level::Trace) {
+            let state = inner.state.borrow();
+            trace!(
+                "current state: {} usb devices, {} errors, changed is {}",
+                state.devices.len(),
+                state.errors,
+                state.changed
+            );
         }
 
         glib::Continue(true)
