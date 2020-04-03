@@ -1,5 +1,6 @@
 mod db;
 
+use crate::fs::write_string_privileged;
 use anyhow::*;
 use db::parse_all;
 use std::collections::HashMap;
@@ -106,6 +107,23 @@ impl UsbDevice {
 
     pub fn set_autosuspend_delay(&mut self, delay: u64) {
         self.delay = delay;
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let control_path = self.char_device_path.join("power/control");
+        let autosuspend_delay_path = self.char_device_path.join("power/autosuspend_delay_ms");
+
+        let control_text = if self.autosuspend {
+            "auto".to_string()
+        } else {
+            "on".to_string()
+        };
+        let autosuspend_delay_text = self.delay.to_string();
+
+        write_string_privileged(&control_path, control_text)?;
+        write_string_privileged(&autosuspend_delay_path, autosuspend_delay_text)?;
+
+        Ok(())
     }
 }
 
