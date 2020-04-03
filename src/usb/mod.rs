@@ -103,6 +103,10 @@ impl UsbDevice {
     pub fn set_autosuspend(&mut self, autosuspend: bool) {
         self.autosuspend = autosuspend;
     }
+
+    pub fn set_autosuspend_delay(&mut self, delay: u64) {
+        self.delay = delay;
+    }
 }
 
 #[derive(Copy, Clone, Debug)]

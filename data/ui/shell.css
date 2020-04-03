@@ -23,3 +23,8 @@
     font-size: 0.8em;
     color: rgb(144, 144, 144);
 }
+
+.error .combo {
+    border-color: rgb(255, 60, 60);
+    
+}

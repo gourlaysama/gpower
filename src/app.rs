@@ -3,7 +3,8 @@ use gio::prelude::ApplicationExtManual;
 use gio::subclass::prelude::ApplicationImpl;
 use glib::subclass::{self, prelude::*};
 use glib::translate::*;
-use glib::*;
+use glib::{clone, glib_object_subclass, glib_object_wrapper, glib_wrapper};
+
 use glib::{MainContext, Receiver, Sender};
 use gtk::prelude::*;
 use gtk::subclass::application::GtkApplicationImpl;
@@ -15,12 +16,27 @@ use std::time::Duration;
 #[derive(Clone, Debug)]
 pub enum Action {
     SetAutoSuspend(u32, bool),
+    SetAutoSuspendDelay(gtk::ComboBoxText, u32, String),
 }
 
 pub struct GPInnerApplication {
     sender: Sender<Action>,
     receiver: RefCell<Option<Receiver<Action>>>,
     state: RefCell<Vec<UsbDevice>>,
+    builder: RefCell<Option<gtk::Builder>>,
+    changed: RefCell<bool>,
+}
+
+impl GPInnerApplication {
+    fn set_changed(&self) {
+        let mut changed = self.changed.borrow_mut();
+        if !*changed {
+            let builder = self.builder.borrow();
+            get_widget!(builder.as_ref().unwrap(), gtk::Button, apply_button);
+            apply_button.set_sensitive(true);
+            *changed = true;
+        }
+    }
 }
 
 impl ObjectSubclass for GPInnerApplication {
@@ -40,6 +56,8 @@ impl ObjectSubclass for GPInnerApplication {
             sender,
             receiver: RefCell::new(Some(receiver)),
             state,
+            builder: RefCell::new(None),
+            changed: RefCell::new(false),
         }
     }
 }
@@ -86,19 +104,30 @@ fn build_usb_entry(device: &usb::UsbDevice, app: &GPInnerApplication) -> gtk::Li
     label_main.set_halign(gtk::Align::Start);
     main_box.pack_start(&text_box, true, true, 0);
 
+    let cb_box = gtk::ComboBoxText::new_with_entry();
+
     let button = gtk::Switch::new();
     button.set_active(device.can_autosuspend());
     let id = device.get_id();
-    button.connect_state_set(clone!(@strong app.sender as sender => move |_, on| {
-        send!(sender, Action::SetAutoSuspend(id, on));
-        glib::signal::Inhibit(false)
-    }
-    ));
+    button.connect_state_set(
+        clone!(@strong app.sender as sender, @strong cb_box as cb => move |_, on| {
+            send!(sender, Action::SetAutoSuspend(id, on));
+            if on {
+                send!(sender, Action::SetAutoSuspendDelay(cb.clone(),
+                id,
+                cb.get_active_text().unwrap().as_str().to_owned(),
+            ));
+            } else {
+                set_error(&cb, None);
+            }
+            glib::signal::Inhibit(false)
+        }
+        ),
+    );
     main_box.add(&button);
 
-    let cb_box = gtk::ComboBoxText::new_with_entry();
     cb_box.set_valign(gtk::Align::Center);
-    cb_box.append_text("Immediately");
+    cb_box.append_text("0 seconds");
     let delay = device.delay();
     let autosuspend = device.can_autosuspend();
     if !autosuspend {
@@ -117,6 +146,13 @@ fn build_usb_entry(device: &usb::UsbDevice, app: &GPInnerApplication) -> gtk::Li
     cb_box.append_text("20 seconds");
     cb_box.append_text("1 minute");
     cb_box.append_text("5 minutes");
+    cb_box.connect_changed(clone!(@strong app.sender as sender => move |cb| {
+        send!(sender, Action::SetAutoSuspendDelay(cb.clone(),
+            id,
+            cb.get_active_text().unwrap().as_str().to_owned(),
+        ));
+    }));
+
     main_box.add(&cb_box);
 
     button
@@ -132,7 +168,26 @@ fn build_usb_entry(device: &usb::UsbDevice, app: &GPInnerApplication) -> gtk::Li
     row
 }
 
-glib::glib_wrapper! {
+fn set_error(cb: &gtk::ComboBoxText, error: Option<&str>) {
+    if error.is_some() {
+        cb.get_style_context().add_class("error");
+        cb.get_child()
+            .unwrap()
+            .downcast::<gtk::Entry>()
+            .unwrap()
+            .set_icon_from_icon_name(gtk::EntryIconPosition::Secondary, Some("error"));
+    } else {
+        cb.get_style_context().remove_class("error");
+        cb.get_child()
+            .unwrap()
+            .downcast::<gtk::Entry>()
+            .unwrap()
+            .set_icon_from_icon_name(gtk::EntryIconPosition::Secondary, None);
+    }
+    cb.set_tooltip_text(error);
+}
+
+glib_wrapper! {
     pub struct GPApplication(
         Object<subclass::simple::InstanceStruct<GPInnerApplication>,
         subclass::simple::ClassStruct<GPInnerApplication>,
@@ -193,6 +248,8 @@ impl GPApplication {
             main_list_box.add(&e);
         }
 
+        inner.builder.replace(Some(builder));
+
         win
     }
 
@@ -207,6 +264,27 @@ impl GPApplication {
                         d.set_autosuspend(autosuspend);
                     }
                 }
+
+                inner.set_changed();
+            }
+            Action::SetAutoSuspendDelay(source, id, delay) => {
+                match humantime::parse_duration(&delay) {
+                    Ok(duration) => {
+                        set_error(&source, None);
+                        let mut devices = inner.state.borrow_mut();
+                        for d in devices.iter_mut() {
+                            if d.get_id() == id {
+                                // TODO: use u128 eveywhere for delay?
+                                d.set_autosuspend_delay(duration.as_millis() as u64);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        set_error(&source, Some(&format!("{}", e)));
+                    }
+                }
+
+                inner.set_changed();
             }
         }
 
