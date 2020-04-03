@@ -25,17 +25,18 @@ pub struct GPInnerApplication {
     state: RefCell<Vec<UsbDevice>>,
     builder: RefCell<Option<gtk::Builder>>,
     changed: RefCell<bool>,
+    errors: RefCell<u16>,
 }
 
 impl GPInnerApplication {
     fn set_changed(&self) {
         let mut changed = self.changed.borrow_mut();
-        if !*changed {
-            let builder = self.builder.borrow();
-            get_widget!(builder.as_ref().unwrap(), gtk::Button, apply_button);
-            apply_button.set_sensitive(true);
-            *changed = true;
-        }
+        let errors = self.errors.borrow();
+
+        let builder = self.builder.borrow();
+        get_widget!(builder.as_ref().unwrap(), gtk::Button, apply_button);
+        apply_button.set_sensitive(*errors == 0);
+        *changed = true;
     }
 }
 
@@ -58,6 +59,7 @@ impl ObjectSubclass for GPInnerApplication {
             state,
             builder: RefCell::new(None),
             changed: RefCell::new(false),
+            errors: RefCell::new(0),
         }
     }
 }
@@ -83,108 +85,6 @@ impl ApplicationImpl for GPInnerApplication {
             .unwrap()
             .attach(None, move |action| outer_app.process_action(action));
     }
-}
-
-fn build_usb_entry(device: &usb::UsbDevice, app: &GPInnerApplication) -> gtk::ListBoxRow {
-    let row = gtk::ListBoxRow::new();
-    row.set_activatable(false);
-    row.set_selectable(false);
-    let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-
-    let text_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let label_main = gtk::Label::new(Some(&device.get_name()));
-    let label_info = gtk::Label::new(Some(&device.get_description()));
-    label_info.get_style_context().add_class("desc_label");
-    text_box.add(&label_main);
-    text_box.add(&label_info);
-    text_box.set_valign(gtk::Align::Center);
-    text_box.set_halign(gtk::Align::Start);
-    text_box.set_spacing(3);
-    label_info.set_halign(gtk::Align::Start);
-    label_main.set_halign(gtk::Align::Start);
-    main_box.pack_start(&text_box, true, true, 0);
-
-    let cb_box = gtk::ComboBoxText::new_with_entry();
-
-    let button = gtk::Switch::new();
-    button.set_active(device.can_autosuspend());
-    let id = device.get_id();
-    button.connect_state_set(
-        clone!(@strong app.sender as sender, @strong cb_box as cb => move |_, on| {
-            send!(sender, Action::SetAutoSuspend(id, on));
-            if on {
-                send!(sender, Action::SetAutoSuspendDelay(cb.clone(),
-                id,
-                cb.get_active_text().unwrap().as_str().to_owned(),
-            ));
-            } else {
-                set_error(&cb, None);
-            }
-            glib::signal::Inhibit(false)
-        }
-        ),
-    );
-    main_box.add(&button);
-
-    cb_box.set_valign(gtk::Align::Center);
-    cb_box.append_text("0 seconds");
-    let delay = device.delay();
-    let autosuspend = device.can_autosuspend();
-    if !autosuspend {
-        cb_box.set_sensitive(false);
-    }
-    if delay == 0 {
-        cb_box.set_active(Some(0));
-    } else if autosuspend {
-        cb_box.append_text(&humantime::format_duration(Duration::from_millis(delay)).to_string());
-        cb_box.set_active(Some(1));
-    }
-
-    cb_box.append_text("1 second");
-    cb_box.append_text("2 seconds");
-    cb_box.append_text("5 seconds");
-    cb_box.append_text("20 seconds");
-    cb_box.append_text("1 minute");
-    cb_box.append_text("5 minutes");
-    cb_box.connect_changed(clone!(@strong app.sender as sender => move |cb| {
-        send!(sender, Action::SetAutoSuspendDelay(cb.clone(),
-            id,
-            cb.get_active_text().unwrap().as_str().to_owned(),
-        ));
-    }));
-
-    main_box.add(&cb_box);
-
-    button
-        .bind_property("active", &cb_box, "sensitive")
-        .flags(
-            glib::BindingFlags::DEFAULT
-                | glib::BindingFlags::SYNC_CREATE
-                | glib::BindingFlags::BIDIRECTIONAL,
-        )
-        .build();
-
-    row.add(&main_box);
-    row
-}
-
-fn set_error(cb: &gtk::ComboBoxText, error: Option<&str>) {
-    if error.is_some() {
-        cb.get_style_context().add_class("error");
-        cb.get_child()
-            .unwrap()
-            .downcast::<gtk::Entry>()
-            .unwrap()
-            .set_icon_from_icon_name(gtk::EntryIconPosition::Secondary, Some("error"));
-    } else {
-        cb.get_style_context().remove_class("error");
-        cb.get_child()
-            .unwrap()
-            .downcast::<gtk::Entry>()
-            .unwrap()
-            .set_icon_from_icon_name(gtk::EntryIconPosition::Secondary, None);
-    }
-    cb.set_tooltip_text(error);
 }
 
 glib_wrapper! {
@@ -242,7 +142,7 @@ impl GPApplication {
         get_widget!(builder, gtk::ListBox, main_list_box);
         let mut entries = Vec::new();
         for d in inner.state.borrow().iter() {
-            entries.push(build_usb_entry(&d, inner));
+            entries.push(self.build_usb_entry(&d, inner));
         }
         for e in entries {
             main_list_box.add(&e);
@@ -251,6 +151,112 @@ impl GPApplication {
         inner.builder.replace(Some(builder));
 
         win
+    }
+
+    fn build_usb_entry(
+        &self,
+        device: &usb::UsbDevice,
+        app: &GPInnerApplication,
+    ) -> gtk::ListBoxRow {
+        let row = gtk::ListBoxRow::new();
+        row.set_activatable(false);
+        row.set_selectable(false);
+        let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        let text_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let label_main = gtk::Label::new(Some(&device.get_name()));
+        let label_info = gtk::Label::new(Some(&device.get_description()));
+        label_info.get_style_context().add_class("desc_label");
+        text_box.add(&label_main);
+        text_box.add(&label_info);
+        text_box.set_valign(gtk::Align::Center);
+        text_box.set_halign(gtk::Align::Start);
+        text_box.set_spacing(3);
+        label_info.set_halign(gtk::Align::Start);
+        label_main.set_halign(gtk::Align::Start);
+        main_box.pack_start(&text_box, true, true, 0);
+        let cb_box = gtk::ComboBoxText::new_with_entry();
+        let button = gtk::Switch::new();
+        button.set_active(device.can_autosuspend());
+        let id = device.get_id();
+        button.connect_state_set(
+            clone!(@strong app.sender as sender, @strong cb_box as cb, @strong self as app => move |_, on| {
+                send!(sender, Action::SetAutoSuspend(id, on));
+                if on {
+                    send!(sender, Action::SetAutoSuspendDelay(cb.clone(),
+                    id,
+                    cb.get_active_text().unwrap().as_str().to_owned(),
+                ));
+                } else {
+                    app.set_error(&cb, None);
+                }
+                glib::signal::Inhibit(false)
+            }
+            ),
+        );
+        main_box.add(&button);
+        cb_box.set_valign(gtk::Align::Center);
+        cb_box.append_text("0 seconds");
+        let delay = device.delay();
+        let autosuspend = device.can_autosuspend();
+        if !autosuspend {
+            cb_box.set_sensitive(false);
+        }
+        if delay == 0 {
+            cb_box.set_active(Some(0));
+        } else if autosuspend {
+            cb_box
+                .append_text(&humantime::format_duration(Duration::from_millis(delay)).to_string());
+            cb_box.set_active(Some(1));
+        }
+        cb_box.append_text("1 second");
+        cb_box.append_text("2 seconds");
+        cb_box.append_text("5 seconds");
+        cb_box.append_text("20 seconds");
+        cb_box.append_text("1 minute");
+        cb_box.append_text("5 minutes");
+        cb_box.connect_changed(clone!(@strong app.sender as sender => move |cb| {
+            send!(sender, Action::SetAutoSuspendDelay(cb.clone(),
+                id,
+                cb.get_active_text().unwrap().as_str().to_owned(),
+            ));
+        }));
+        main_box.add(&cb_box);
+        button
+            .bind_property("active", &cb_box, "sensitive")
+            .flags(
+                glib::BindingFlags::DEFAULT
+                    | glib::BindingFlags::SYNC_CREATE
+                    | glib::BindingFlags::BIDIRECTIONAL,
+            )
+            .build();
+        row.add(&main_box);
+        row
+    }
+
+    fn set_error(&self, cb: &gtk::ComboBoxText, error: Option<&str>) {
+        let inner = GPInnerApplication::from_instance(self);
+        let context = cb.get_style_context();
+
+        if !context.has_class("error") && error.is_some() {
+            context.add_class("error");
+            cb.get_child()
+                .unwrap()
+                .downcast::<gtk::Entry>()
+                .unwrap()
+                .set_icon_from_icon_name(gtk::EntryIconPosition::Secondary, Some("error"));
+
+            *inner.errors.borrow_mut() += 1;
+        } else if context.has_class("error") && error.is_none() {
+            context.remove_class("error");
+            cb.get_child()
+                .unwrap()
+                .downcast::<gtk::Entry>()
+                .unwrap()
+                .set_icon_from_icon_name(gtk::EntryIconPosition::Secondary, None);
+
+            *inner.errors.borrow_mut() -= 1;
+        }
+        cb.set_tooltip_text(error);
     }
 
     fn process_action(&self, action: Action) -> glib::Continue {
@@ -270,7 +276,7 @@ impl GPApplication {
             Action::SetAutoSuspendDelay(source, id, delay) => {
                 match humantime::parse_duration(&delay) {
                     Ok(duration) => {
-                        set_error(&source, None);
+                        self.set_error(&source, None);
                         let mut devices = inner.state.borrow_mut();
                         for d in devices.iter_mut() {
                             if d.get_id() == id {
@@ -280,7 +286,7 @@ impl GPApplication {
                         }
                     }
                     Err(e) => {
-                        set_error(&source, Some(&format!("{}", e)));
+                        self.set_error(&source, Some(&format!("{}", e)));
                     }
                 }
 
