@@ -22,21 +22,34 @@ pub enum Action {
 pub struct GPInnerApplication {
     sender: Sender<Action>,
     receiver: RefCell<Option<Receiver<Action>>>,
-    state: RefCell<Vec<UsbDevice>>,
+    state: RefCell<State>,
     builder: RefCell<Option<gtk::Builder>>,
-    changed: RefCell<bool>,
-    errors: RefCell<u16>,
+}
+
+struct State {
+    devices: Vec<UsbDevice>,
+    changed: bool,
+    errors: u16,
+}
+
+impl State {
+    fn new(devices: Vec<UsbDevice>) -> RefCell<Self> {
+        RefCell::new(State {
+            devices,
+            changed: false,
+            errors: 0,
+        })
+    }
 }
 
 impl GPInnerApplication {
     fn set_changed(&self) {
-        let mut changed = self.changed.borrow_mut();
-        let errors = self.errors.borrow();
+        let mut state = self.state.borrow_mut();
 
         let builder = self.builder.borrow();
         get_widget!(builder.as_ref().unwrap(), gtk::Button, apply_button);
-        apply_button.set_sensitive(*errors == 0);
-        *changed = true;
+        apply_button.set_sensitive(state.errors == 0);
+        state.changed = true;
     }
 }
 
@@ -49,7 +62,7 @@ impl ObjectSubclass for GPInnerApplication {
     glib_object_subclass!();
 
     fn new() -> Self {
-        let state = RefCell::new(usb::list_devices().unwrap());
+        let state = State::new(usb::list_devices().unwrap());
 
         let (sender, receiver) = MainContext::channel(glib::PRIORITY_DEFAULT);
 
@@ -58,8 +71,6 @@ impl ObjectSubclass for GPInnerApplication {
             receiver: RefCell::new(Some(receiver)),
             state,
             builder: RefCell::new(None),
-            changed: RefCell::new(false),
-            errors: RefCell::new(0),
         }
     }
 }
@@ -141,7 +152,7 @@ impl GPApplication {
         category_list.add(&row);
         get_widget!(builder, gtk::ListBox, main_list_box);
         let mut entries = Vec::new();
-        for d in inner.state.borrow().iter() {
+        for d in inner.state.borrow().devices.iter() {
             entries.push(self.build_usb_entry(&d, inner));
         }
         for e in entries {
@@ -198,15 +209,14 @@ impl GPApplication {
         cb_box.append_text("0 seconds");
         let delay = device.delay();
         let autosuspend = device.can_autosuspend();
-        if !autosuspend {
-            cb_box.set_sensitive(false);
-        }
-        if delay == 0 {
-            cb_box.set_active(Some(0));
-        } else if autosuspend {
+        cb_box.set_sensitive(autosuspend);
+
+        if autosuspend && delay != 0 {
             cb_box
                 .append_text(&humantime::format_duration(Duration::from_millis(delay)).to_string());
             cb_box.set_active(Some(1));
+        } else {
+            cb_box.set_active(Some(0));
         }
         cb_box.append_text("1 second");
         cb_box.append_text("2 seconds");
@@ -245,7 +255,7 @@ impl GPApplication {
                 .unwrap()
                 .set_icon_from_icon_name(gtk::EntryIconPosition::Secondary, Some("error"));
 
-            *inner.errors.borrow_mut() += 1;
+            inner.state.borrow_mut().errors += 1;
         } else if context.has_class("error") && error.is_none() {
             context.remove_class("error");
             cb.get_child()
@@ -254,7 +264,7 @@ impl GPApplication {
                 .unwrap()
                 .set_icon_from_icon_name(gtk::EntryIconPosition::Secondary, None);
 
-            *inner.errors.borrow_mut() -= 1;
+            inner.state.borrow_mut().errors -= 1;
         }
         cb.set_tooltip_text(error);
     }
@@ -264,8 +274,7 @@ impl GPApplication {
 
         match action {
             Action::SetAutoSuspend(id, autosuspend) => {
-                let mut devices = inner.state.borrow_mut();
-                for d in devices.iter_mut() {
+                for d in inner.state.borrow_mut().devices.iter_mut() {
                     if d.get_id() == id {
                         d.set_autosuspend(autosuspend);
                     }
@@ -277,8 +286,7 @@ impl GPApplication {
                 match humantime::parse_duration(&delay) {
                     Ok(duration) => {
                         self.set_error(&source, None);
-                        let mut devices = inner.state.borrow_mut();
-                        for d in devices.iter_mut() {
+                        for d in inner.state.borrow_mut().devices.iter_mut() {
                             if d.get_id() == id {
                                 // TODO: use u128 eveywhere for delay?
                                 d.set_autosuspend_delay(duration.as_millis() as u64);
