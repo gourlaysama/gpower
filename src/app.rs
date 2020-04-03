@@ -1,5 +1,5 @@
 use crate::usb::{self, UsbDevice};
-use gio::prelude::ApplicationExtManual;
+use gio::prelude::*;
 use gio::subclass::prelude::ApplicationImpl;
 use glib::subclass::{self, prelude::*};
 use glib::translate::*;
@@ -141,6 +141,12 @@ impl GPApplication {
         let builder = gtk::Builder::new_from_string(include_str!("../data/ui/window.ui"));
         get_widget!(builder, gtk::ApplicationWindow, win);
         win.set_application(Some(self));
+
+        get_widget!(builder, gtk::AboutDialog, about_dialog);
+        action!(win, "about", move |_, _| {
+            about_dialog.show_all();
+        });
+
         get_widget!(builder, gtk::ListBox, category_list);
         let label = gtk::Label::new_with_mnemonic(Some("_USB Autosuspend"));
         label.set_margin_top(6);
