@@ -17,6 +17,7 @@ use std::time::Duration;
 pub enum Action {
     SetAutoSuspend(u32, bool),
     SetAutoSuspendDelay(gtk::ComboBoxText, u32, String),
+    Refresh,
 }
 
 pub struct GPInnerApplication {
@@ -51,6 +52,17 @@ impl GPInnerApplication {
         get_widget!(builder.as_ref().unwrap(), gtk::Button, apply_button);
         apply_button.set_sensitive(state.errors == 0);
         state.changed = true;
+    }
+
+    fn reset_changed(&self) {
+        trace!("resetting changes");
+        let mut state = self.state.borrow_mut();
+
+        let builder = self.builder.borrow();
+        get_widget!(builder.as_ref().unwrap(), gtk::Button, apply_button);
+        apply_button.set_sensitive(false);
+        state.errors = 0;
+        state.changed = false;
     }
 }
 
@@ -147,6 +159,15 @@ impl GPApplication {
         get_widget!(builder, gtk::ApplicationWindow, win);
         win.set_application(Some(self));
 
+        action!(
+            win,
+            "refresh",
+            clone!(@strong inner.sender as sender => move |_,_| {
+                debug!("refreshing the view");
+                send!(sender, Action::Refresh);
+            })
+        );
+
         get_widget!(builder, gtk::AboutDialog, about_dialog);
         action!(win, "about", move |_, _| {
             debug!("showing about dialog");
@@ -163,6 +184,17 @@ impl GPApplication {
         row.add(&label);
         category_list.add(&row);
         get_widget!(builder, gtk::ListBox, main_list_box);
+
+        self.fill_usb_list(&main_list_box);
+
+        inner.builder.replace(Some(builder));
+
+        win
+    }
+
+    fn fill_usb_list(&self, main_list_box: &gtk::ListBox) {
+        let inner = GPInnerApplication::from_instance(self);
+
         let mut entries = Vec::new();
         for d in inner.state.borrow().devices.iter() {
             entries.push(self.build_usb_entry(&d, inner));
@@ -170,10 +202,6 @@ impl GPApplication {
         for e in entries {
             main_list_box.add(&e);
         }
-
-        inner.builder.replace(Some(builder));
-
-        win
     }
 
     fn build_usb_entry(
@@ -289,6 +317,20 @@ impl GPApplication {
         let inner = GPInnerApplication::from_instance(self);
 
         match action {
+            Action::Refresh => {
+                get_widget!(
+                    inner.builder.borrow().as_ref().unwrap(),
+                    gtk::ListBox,
+                    main_list_box
+                );
+                main_list_box.foreach(clone!(@weak main_list_box => move |item| {
+                    main_list_box.remove(item);
+                }));
+                inner.reset_changed();
+                inner.state.borrow_mut().devices = usb::list_devices().unwrap();
+                self.fill_usb_list(&main_list_box);
+                main_list_box.show_all();
+            }
             Action::SetAutoSuspend(id, autosuspend) => {
                 for d in inner.state.borrow_mut().devices.iter_mut() {
                     if d.get_id() == id {
