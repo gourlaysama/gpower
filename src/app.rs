@@ -77,7 +77,14 @@ impl ObjectSubclass for GPInnerApplication {
 
     fn new() -> Self {
         debug!("initializing GPInnerApplication");
-        let state = State::new(usb::list_devices().unwrap());
+        let devices = match usb::list_devices() {
+            Ok(d) => d,
+            Err(e) => {
+                error!("failed to load devices: {}", e);
+                Vec::new()
+            }
+        };
+        let state = State::new(devices);
 
         let (sender, receiver) = MainContext::channel(glib::PRIORITY_DEFAULT);
 
@@ -251,7 +258,7 @@ impl GPApplication {
                 if on {
                     send!(sender, Action::SetAutoSuspendDelay(cb.clone(),
                     id,
-                    cb.get_active_text().unwrap().as_str().to_owned(),
+                    cb.get_active_text().map(|s| s.as_str().to_owned()).unwrap_or_else(String::new),
                 ));
                 } else {
                     app.set_error(&cb, None);
@@ -283,7 +290,7 @@ impl GPApplication {
         cb_box.connect_changed(clone!(@strong app.sender as sender => move |cb| {
             send!(sender, Action::SetAutoSuspendDelay(cb.clone(),
                 id,
-                cb.get_active_text().unwrap().as_str().to_owned(),
+                cb.get_active_text().map(|s| s.as_str().to_owned()).unwrap_or_else(String::new),
             ));
         }));
         main_box.add(&cb_box);
@@ -349,7 +356,14 @@ impl GPApplication {
                     main_list_box.remove(item);
                 }));
                 inner.reset_changed();
-                inner.state.borrow_mut().devices = usb::list_devices().unwrap();
+                let devices = match usb::list_devices() {
+                    Ok(d) => d,
+                    Err(e) => {
+                        error!("failed to load devices: {}", e);
+                        Vec::new()
+                    }
+                };
+                inner.state.borrow_mut().devices = devices;
                 self.fill_usb_list(&main_list_box);
                 main_list_box.show_all();
             }
