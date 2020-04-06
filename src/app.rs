@@ -19,6 +19,7 @@ pub enum Action {
     Refresh,
     SetAutoSuspend(u32, bool),
     SetAutoSuspendDelay(gtk::ComboBoxText, u32, String),
+    ShowPane(String),
 }
 
 pub struct GPInnerApplication {
@@ -47,23 +48,48 @@ impl State {
 impl GPInnerApplication {
     fn set_changed(&self) {
         trace!("marking state as changed");
-        let mut state = self.state.borrow_mut();
 
-        let builder = self.builder.borrow();
-        get_widget!(builder.as_ref().unwrap(), gtk::Button, apply_button);
+        get_widget!(
+            self.builder.borrow().as_ref().unwrap(),
+            gtk::Button,
+            apply_button
+        );
+        let mut state = self.state.borrow_mut();
         apply_button.set_sensitive(state.errors == 0);
         state.changed = true;
     }
 
     fn reset_changed(&self) {
         trace!("resetting changes");
-        let mut state = self.state.borrow_mut();
+        self.populate_summary();
 
-        let builder = self.builder.borrow();
-        get_widget!(builder.as_ref().unwrap(), gtk::Button, apply_button);
+        get_widget!(
+            self.builder.borrow().as_ref().unwrap(),
+            gtk::Button,
+            apply_button
+        );
         apply_button.set_sensitive(false);
+        let mut state = self.state.borrow_mut();
         state.errors = 0;
         state.changed = false;
+    }
+
+    fn populate_summary(&self) {
+        get_widget!(
+            self.builder.borrow().as_ref().unwrap(),
+            gtk::Label,
+            label_usb_summary
+        );
+
+        let devices = &self.state.borrow().devices;
+        let mut suspendable_count = 0;
+        for d in devices {
+            if d.can_autosuspend() {
+                suspendable_count += 1;
+            }
+        }
+
+        label_usb_summary.set_text(&format!("{} / {}", suspendable_count, devices.len()));
     }
 }
 
@@ -195,14 +221,44 @@ impl GPApplication {
         });
 
         get_widget!(builder, gtk::ListBox, category_list);
+        let label = gtk::Label::new_with_mnemonic(Some("_Summary"));
+        label.set_margin_top(6);
+        label.set_margin_bottom(6);
+        label.set_margin_start(18);
+        label.set_halign(gtk::Align::Start);
+        let summary_row = gtk::ListBoxRow::new();
+        summary_row.add(&label);
+        summary_row.set_action_name(Some("win.show_summary"));
+        category_list.add(&summary_row);
         let label = gtk::Label::new_with_mnemonic(Some("_USB Autosuspend"));
         label.set_margin_top(6);
         label.set_margin_bottom(6);
-        label.set_margin_start(6);
-        label.set_margin_end(6);
-        let row = gtk::ListBoxRow::new();
-        row.add(&label);
-        category_list.add(&row);
+        label.set_margin_start(18);
+        label.set_halign(gtk::Align::Start);
+        let usb_row = gtk::ListBoxRow::new();
+        usb_row.add(&label);
+        usb_row.set_action_name(Some("win.show_usb"));
+        category_list.add(&usb_row);
+
+        action!(
+            win,
+            "show_summary",
+            clone!(@strong inner.sender as sender, @strong summary_row, @strong category_list => move |_,_| {
+                debug!("showing summary pane");
+                send!(sender, Action::ShowPane("summary_pane".to_owned()));
+                category_list.select_row(Some(&summary_row));
+            })
+        );
+
+        action!(
+            win,
+            "show_usb",
+            clone!(@strong inner.sender as sender, @strong usb_row, @strong category_list => move |_,_| {
+                debug!("showing usb pane");
+                send!(sender, Action::ShowPane("usb_pane".to_owned()));
+                category_list.select_row(Some(&usb_row));
+            })
+        );
         get_widget!(builder, gtk::ListBox, main_list_box);
 
         self.fill_usb_list(&main_list_box);
@@ -211,6 +267,8 @@ impl GPApplication {
         usb_scroll.add(&main_list_box);
 
         inner.builder.replace(Some(builder));
+
+        inner.populate_summary();
 
         win
     }
@@ -233,8 +291,7 @@ impl GPApplication {
         app: &GPInnerApplication,
     ) -> gtk::ListBoxRow {
         let row = gtk::ListBoxRow::new();
-        row.set_activatable(false);
-        row.set_selectable(false);
+        row.set_can_focus(false);
         let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         let text_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let label_main = gtk::Label::new(Some(&device.get_name()));
@@ -355,7 +412,6 @@ impl GPApplication {
                 main_list_box.foreach(clone!(@weak main_list_box => move |item| {
                     main_list_box.remove(item);
                 }));
-                inner.reset_changed();
                 let devices = match usb::list_devices() {
                     Ok(d) => d,
                     Err(e) => {
@@ -366,6 +422,8 @@ impl GPApplication {
                 inner.state.borrow_mut().devices = devices;
                 self.fill_usb_list(&main_list_box);
                 main_list_box.show_all();
+
+                inner.reset_changed();
             }
             Action::SetAutoSuspend(id, autosuspend) => {
                 for d in inner.state.borrow_mut().devices.iter_mut() {
@@ -393,6 +451,15 @@ impl GPApplication {
                 }
 
                 inner.set_changed();
+            }
+            Action::ShowPane(pane) => {
+                get_widget!(
+                    inner.builder.borrow().as_ref().unwrap(),
+                    gtk::Stack,
+                    main_stack
+                );
+                main_stack.set_visible_child_name(&pane);
+                main_stack.show_all();
             }
         }
 

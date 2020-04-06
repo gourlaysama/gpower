@@ -7,10 +7,17 @@
     <property name="can_focus">False</property>
     <property name="icon_name">locked</property>
   </object>
+  <object class="GtkImage" id="image3">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="icon_name">view-more-horizontal-symbolic</property>
+  </object>
   <object class="GtkListBox" id="main_list_box">
+    <property name="name">main_list_box</property>
     <property name="visible">True</property>
     <property name="can_focus">False</property>
     <property name="valign">start</property>
+    <property name="selection_mode">none</property>
   </object>
   <object class="GtkPopoverMenu" id="main_menu">
     <property name="width_request">140</property>
@@ -140,6 +147,8 @@
         <property name="spacing">6</property>
         <child>
           <object class="GtkListBox" id="category_list">
+            <property name="name">category_list</property>
+            <property name="width_request">200</property>
             <property name="visible">True</property>
             <property name="can_focus">False</property>
           </object>
@@ -161,12 +170,120 @@
           </packing>
         </child>
         <child>
-          <object class="GtkStack">
+          <object class="GtkStack" id="main_stack">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="margin_left">12</property>
             <property name="margin_right">12</property>
             <property name="interpolate_size">True</property>
+            <child>
+              <object class="GtkBox">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="halign">center</property>
+                <property name="valign">start</property>
+                <property name="margin_left">12</property>
+                <property name="margin_right">12</property>
+                <property name="margin_top">12</property>
+                <property name="margin_bottom">6</property>
+                <property name="orientation">vertical</property>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="margin_bottom">12</property>
+                    <property name="label" translatable="yes">Summary</property>
+                    <attributes>
+                      <attribute name="weight" value="bold"/>
+                    </attributes>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkListBox">
+                    <property name="width_request">540</property>
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="selection_mode">none</property>
+                    <child>
+                      <object class="GtkListBoxRow">
+                        <property name="height_request">50</property>
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="visible">True</property>
+                            <property name="can_focus">False</property>
+                            <property name="spacing">12</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="visible">True</property>
+                                <property name="can_focus">False</property>
+                                <property name="label" translatable="yes">Autosuspend USB devices when idle</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkButton">
+                                <property name="visible">True</property>
+                                <property name="can_focus">True</property>
+                                <property name="receives_default">True</property>
+                                <property name="valign">center</property>
+                                <property name="action_name">win.show_usb</property>
+                                <property name="image">image3</property>
+                                <property name="relief">none</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="pack_type">end</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="label_usb_summary">
+                                <property name="visible">True</property>
+                                <property name="can_focus">False</property>
+                                <property name="margin_left">6</property>
+                                <property name="margin_right">6</property>
+                                <property name="label" translatable="yes">&lt;usb info here&gt;</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="pack_type">end</property>
+                                <property name="position">2</property>
+                              </packing>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <style>
+                      <class name="list_box"/>
+                    </style>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">2</property>
+                  </packing>
+                </child>
+              </object>
+              <packing>
+                <property name="name">summary_pane</property>
+                <property name="title" translatable="yes">page1</property>
+              </packing>
+            </child>
             <child>
               <object class="GtkBox">
                 <property name="visible">True</property>
@@ -215,8 +332,9 @@
                 </child>
               </object>
               <packing>
-                <property name="name">page0</property>
+                <property name="name">usb_pane</property>
                 <property name="title" translatable="yes">page0</property>
+                <property name="position">1</property>
               </packing>
             </child>
           </object>

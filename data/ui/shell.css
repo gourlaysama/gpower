@@ -1,17 +1,19 @@
 .list_box {
     margin: 12px;
-    padding: 3px;
+    border: 1px solid rgb(27, 27, 27);
 }
 
 .list_box row {
     padding: 12px;
+    border-bottom: 1px solid rgb(50, 50, 50);
+}
+
+#main_list_box {
     padding-right: 20px;
-    border: 1px solid rgb(27, 27, 27);
-    border-bottom: none;
 }
 
 .list_box row:last-child {
-    border-bottom: 1px solid rgb(27, 27, 27);
+    border-bottom: none;
 }
 
 .desc_label {
