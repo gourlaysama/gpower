@@ -187,6 +187,9 @@ impl GPApplication {
 
         self.fill_usb_list(&main_list_box);
 
+        get_widget!(builder, gtk::ScrolledWindow, usb_scroll);
+        usb_scroll.add(&main_list_box);
+
         inner.builder.replace(Some(builder));
 
         win

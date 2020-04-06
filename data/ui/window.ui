@@ -7,6 +7,11 @@
     <property name="can_focus">False</property>
     <property name="icon_name">locked</property>
   </object>
+  <object class="GtkListBox" id="main_list_box">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="valign">start</property>
+  </object>
   <object class="GtkPopoverMenu" id="main_menu">
     <property name="width_request">140</property>
     <property name="can_focus">False</property>
@@ -57,6 +62,7 @@
       </object>
       <packing>
         <property name="submenu">main</property>
+        <property name="position">1</property>
       </packing>
     </child>
   </object>
@@ -165,7 +171,6 @@
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
                 <property name="halign">center</property>
-                <property name="valign">center</property>
                 <property name="margin_left">12</property>
                 <property name="margin_right">12</property>
                 <property name="margin_top">12</property>
@@ -189,15 +194,20 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkListBox" id="main_list_box">
+                  <object class="GtkScrolledWindow" id="usb_scroll">
+                    <property name="height_request">580</property>
                     <property name="visible">True</property>
-                    <property name="can_focus">False</property>
+                    <property name="can_focus">True</property>
+                    <property name="hscrollbar_policy">never</property>
+                    <child>
+                      <placeholder/>
+                    </child>
                     <style>
                       <class name="list_box"/>
                     </style>
                   </object>
                   <packing>
-                    <property name="expand">False</property>
+                    <property name="expand">True</property>
                     <property name="fill">True</property>
                     <property name="position">1</property>
                   </packing>
