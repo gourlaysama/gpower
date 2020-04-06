@@ -297,6 +297,7 @@ impl GPApplication {
         let label_main = gtk::Label::new(Some(&device.get_name()));
         let label_info = gtk::Label::new(Some(&device.get_description()));
         label_info.get_style_context().add_class("desc_label");
+        label_info.get_style_context().add_class("dim-label");
         text_box.add(&label_main);
         text_box.add(&label_info);
         text_box.set_valign(gtk::Align::Center);
@@ -367,24 +368,14 @@ impl GPApplication {
         debug!("setting error state to '{}'", error.is_some());
 
         let inner = GPInnerApplication::from_instance(self);
-        let context = cb.get_style_context();
+        let context = cb.get_child().unwrap().get_style_context();
 
         if !context.has_class("error") && error.is_some() {
             context.add_class("error");
-            cb.get_child()
-                .unwrap()
-                .downcast::<gtk::Entry>()
-                .unwrap()
-                .set_icon_from_icon_name(gtk::EntryIconPosition::Secondary, Some("error"));
 
             inner.state.borrow_mut().errors += 1;
         } else if context.has_class("error") && error.is_none() {
             context.remove_class("error");
-            cb.get_child()
-                .unwrap()
-                .downcast::<gtk::Entry>()
-                .unwrap()
-                .set_icon_from_icon_name(gtk::EntryIconPosition::Secondary, None);
 
             inner.state.borrow_mut().errors -= 1;
         }

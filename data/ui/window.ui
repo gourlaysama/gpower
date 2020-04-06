@@ -30,31 +30,6 @@
         <child>
           <object class="GtkModelButton">
             <property name="visible">True</property>
-            <property name="sensitive">False</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <property name="text" translatable="yes">Preference</property>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">0</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkSeparator">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">1</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkModelButton">
-            <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
             <property name="action_name">win.about</property>
@@ -107,6 +82,7 @@
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
+            <property name="tooltip_text" translatable="yes">Abandon changes and refresh</property>
             <property name="action_name">win.refresh</property>
             <property name="always_show_image">True</property>
             <child>
@@ -129,9 +105,13 @@
             <property name="sensitive">False</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
+            <property name="tooltip_text" translatable="yes">Write all changes to disk</property>
             <property name="action_name">win.apply_changes</property>
             <property name="image">image1</property>
             <property name="always_show_image">True</property>
+            <style>
+              <class name="destructive-action"/>
+            </style>
           </object>
           <packing>
             <property name="pack_type">end</property>
@@ -237,6 +217,7 @@
                                 <property name="visible">True</property>
                                 <property name="can_focus">True</property>
                                 <property name="receives_default">True</property>
+                                <property name="tooltip_text" translatable="yes">Configure which devices can autosuspend</property>
                                 <property name="valign">center</property>
                                 <property name="action_name">win.show_usb</property>
                                 <property name="image">image3</property>
@@ -296,26 +277,11 @@
                 <property name="orientation">vertical</property>
                 <property name="spacing">10</property>
                 <child>
-                  <object class="GtkLabel">
-                    <property name="visible">True</property>
-                    <property name="can_focus">False</property>
-                    <property name="halign">start</property>
-                    <property name="label" translatable="yes">Auto-suspend when idle</property>
-                    <attributes>
-                      <attribute name="weight" value="bold"/>
-                    </attributes>
-                  </object>
-                  <packing>
-                    <property name="expand">False</property>
-                    <property name="fill">True</property>
-                    <property name="position">0</property>
-                  </packing>
-                </child>
-                <child>
                   <object class="GtkScrolledWindow" id="usb_scroll">
                     <property name="height_request">580</property>
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
+                    <property name="halign">center</property>
                     <property name="hscrollbar_policy">never</property>
                     <child>
                       <placeholder/>
@@ -327,7 +293,88 @@
                   <packing>
                     <property name="expand">True</property>
                     <property name="fill">True</property>
+                    <property name="pack_type">end</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="label_usb_pane_title">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="label" translatable="yes">Auto-suspend when idle</property>
+                    <attributes>
+                      <attribute name="weight" value="bold"/>
+                    </attributes>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
                     <property name="position">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="margin_left">12</property>
+                    <property name="margin_top">6</property>
+                    <property name="label" translatable="yes">USB devices can be automatically suspended when the kernel detects they have been idle for a length on time.</property>
+                    <property name="wrap">True</property>
+                    <style>
+                      <class name="dim-label"/>
+                    </style>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">2</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkBox" id="box1">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="margin_left">12</property>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="icon_name">warning</property>
+                        <property name="icon_size">3</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
+                        <property name="position">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="halign">start</property>
+                        <property name="margin_left">6</property>
+                        <property name="label" translatable="yes">Keyboards and mouses may not be able to wakeup on their own (on keystroke or motion) after being put to sleep. Hardware support varies. Be careful not to disable your only means of input into your computer!</property>
+                        <property name="wrap">True</property>
+                        <property name="max_width_chars">80</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">False</property>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">3</property>
                   </packing>
                 </child>
               </object>

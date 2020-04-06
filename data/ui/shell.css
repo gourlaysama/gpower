@@ -1,6 +1,6 @@
 .list_box {
     margin: 12px;
-    border: 1px solid rgb(27, 27, 27);
+    border: 1px solid rgb(40, 40, 40);
 }
 
 .list_box row {
@@ -8,7 +8,7 @@
     border-bottom: 1px solid rgb(50, 50, 50);
 }
 
-#main_list_box {
+#main_list_box row {
     padding-right: 20px;
 }
 
@@ -18,9 +18,8 @@
 
 .desc_label {
     font-size: 0.8em;
-    color: rgb(144, 144, 144);
 }
 
-.error .combo {
+/* .error .combo {
     border-color: rgb(255, 60, 60);
-}
+} */
