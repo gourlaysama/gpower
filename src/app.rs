@@ -15,9 +15,10 @@ use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub enum Action {
+    ApplyChanges,
+    Refresh,
     SetAutoSuspend(u32, bool),
     SetAutoSuspendDelay(gtk::ComboBoxText, u32, String),
-    Refresh,
 }
 
 pub struct GPInnerApplication {
@@ -167,6 +168,18 @@ impl GPApplication {
                 send!(sender, Action::Refresh);
             })
         );
+
+        action!(
+            win,
+            "apply_changes",
+            clone!(@strong inner.sender as sender => move |_,_| {
+                debug!("applying changes");
+                send!(sender, Action::ApplyChanges);
+            })
+        );
+
+        get_widget!(builder, gtk::Button, apply_button);
+        apply_button.set_sensitive(false);
 
         get_widget!(builder, gtk::AboutDialog, about_dialog);
         action!(win, "about", move |_, _| {
@@ -320,6 +333,12 @@ impl GPApplication {
         let inner = GPInnerApplication::from_instance(self);
 
         match action {
+            Action::ApplyChanges => {
+                for d in &inner.state.borrow().devices {
+                    d.save().expect("failed to save");
+                }
+                inner.reset_changed();
+            }
             Action::Refresh => {
                 get_widget!(
                     inner.builder.borrow().as_ref().unwrap(),
