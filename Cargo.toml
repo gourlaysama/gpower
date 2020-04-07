@@ -9,10 +9,8 @@ license = "GPL-3.0-or-later"
 
 [dependencies]
 anyhow = "1"
-cairo-rs = "0.8"
 encoding_rs = "0.8"
 gdk = "0.12"
-gdk-pixbuf = { version = "0.8", features = ["v2_36"]}
 gio = { version = "0.8", features = ["v2_46"]}
 glib = "0.9"
 gtk = { version = "0.8", features = ["v3_22"] }
