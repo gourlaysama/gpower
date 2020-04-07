@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=GPower Tweaks
+Categories=Settings;System;HardwareSettings;Utility;GTK;
+Comment=Tweak various power-related settings
+Exec=gpower-tweaks
+Keywords=GPower;Tweaks;Power;
+StartupNotify=true
+Terminal=false
+Type=Application
