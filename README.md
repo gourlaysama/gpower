@@ -14,24 +14,19 @@ Tweak linux power management settings
 
 ## Install
 
-GPower Tweaks is written in Rust, so you need a [Rust install] to build it. It compiles with
-Rust 1.42 or newer.
+GPower Tweaks is build with meson and requires the following to build:
 
-GPower Tweaks requires GTK 3.22 or later and the corresponding development package to build (`gtk3-devel`
-RHEL/Fedora, `libgtk-3-dev` on Debian/Ubuntu).
+- [Rust 1.42 or later][1]
+- GTK 3.22 or later  (`gtk3-devel` on RHEL/Fedora, `libgtk-3-dev` on Debian/Ubuntu)
+- Meson build system
 
-Build it from source with:
+Install it from source with:
 
 ```sh
-$ git clone https://github.com/gourlaysama/gpower-tweaks -b v0.3.0
+$ git clone https://github.com/gourlaysama/gpower-tweaks
 $ cd gpower-tweaks
-$ cargo build --release
-```
-
-And then run it with:
-
-```sh
-$ ./target/release/gpower-tweaks
+$ meson --prefix=/usr build
+$ sudo ninja -C build install
 ```
 
 #### License
@@ -39,3 +34,5 @@ $ ./target/release/gpower-tweaks
 <sub>
 GPower Tweaks  is licensed under the <a href="COPYING">GPL General Public License v3.0 or later</a>.
 </sub>
+
+[1]: https://www.rust-lang.org/tools/install
