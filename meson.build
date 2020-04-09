@@ -18,6 +18,9 @@ dependency('gtk+-3.0', version: '>= 3.22')
 
 cargo = find_program('cargo')
 rustc = find_program('rustc', version: '>= 1.42')
+find_program('awk')
+find_program('find')
+find_program('tar')
 
 rust_flags = run_command('printenv', 'RUSTFLAGS').stdout().strip()
 
@@ -33,7 +36,7 @@ sources = files(
 )
 
 cargo_helper = find_program(join_paths(meson.source_root(), 'build-aux/cargo.sh'))
-custom_target(
+main = custom_target(
   meson.project_name(),
   build_by_default: true,
   input: sources,
@@ -53,7 +56,7 @@ custom_target(
 )
 
 install_data('data/@0@.desktop'.format(app_id),
-    install_dir: join_paths(datadir, 'applications')
+  install_dir: join_paths(datadir, 'applications')
 )
 
 configure_file(
@@ -63,6 +66,18 @@ configure_file(
     'app_id' : app_id,
   },
   install_dir: join_paths(datadir, 'metainfo')
+)
+
+bin_dist_helper = find_program(join_paths(meson.source_root(), 'build-aux/bin-dist.sh'))
+run_target('bin-dist',
+  command: [
+    bin_dist_helper,
+    meson.project_name(),
+    # additional files to package manually
+    'README.md',
+    'COPYING'
+  ],
+  depends: [main],
 )
 
 summary({
