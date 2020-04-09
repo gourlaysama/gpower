@@ -52,8 +52,17 @@ custom_target(
   ]
 )
 
-install_data('data/net.gourlaysama.GPowerTweaks.desktop',
+install_data('data/@0@.desktop'.format(app_id),
     install_dir: join_paths(datadir, 'applications')
+)
+
+configure_file(
+  input: 'data/@0@.metainfo.xml.in'.format(app_id),
+  output : '@BASENAME@',
+  configuration : {
+    'app_id' : app_id,
+  },
+  install_dir: join_paths(datadir, 'metainfo')
 )
 
 summary({

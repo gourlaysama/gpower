@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2020 Antoine Gourlay -->
+<component type="desktop-application">
+  <id>@app_id@</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>GPower Tweaks</name>
+  <summary>A tool to change power management settings</summary>
+  <developer_name>Antoine Gourlay</developer_name>
+  <update_contact>antoine@gourlay.fr</update_contact>
+
+  <description>
+    <p>
+      GPower Tweaks is a tool to change power management settings.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Toggle which USB devices can auto-suspend when idle and after how long</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">@app_id@.desktop</launchable>
+
+  <screenshots>
+    <screenshot type="default" height="1438" width="809">
+      <image>https://github.com/gourlaysama/gpower-tweaks/raw/master/doc/screenshot1.png</image>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://github.com/gourlaysama/gpower-tweaks</url>
+  <url type="bugtracker">https://github.com/gourlaysama/gpower-tweaks/issues</url>
+
+  <kudos>
+    <kudo>HiDpiIcon</kudo>
+    <kudo>ModernToolkit</kudo>
+    <kudo>Notifications</kudo>
+  </kudos>
+
+  <releases>
+    <release version="0.1.0" date="2020-04-09">
+      <description>
+        <p>Initial release.</p>
+      </description>
+    </release>
+  </releases>
+</component>
+
+
