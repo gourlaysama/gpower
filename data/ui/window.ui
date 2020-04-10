@@ -5,7 +5,7 @@
   <object class="GtkImage" id="image1">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
-    <property name="icon_name">locked</property>
+    <property name="icon_name">changes-prevent-symbolic</property>
   </object>
   <object class="GtkImage" id="image3">
     <property name="visible">True</property>
@@ -53,6 +53,7 @@
     <property name="window_position">center</property>
     <property name="default_width">660</property>
     <property name="default_height">400</property>
+    <property name="icon_name">applications-system-symbolic</property>
     <child type="titlebar">
       <object class="GtkHeaderBar" id="header">
         <property name="visible">True</property>
@@ -322,9 +323,6 @@
                     <property name="margin_top">6</property>
                     <property name="label" translatable="yes">USB devices can be automatically suspended when the kernel detects they have been idle for a length on time.</property>
                     <property name="wrap">True</property>
-                    <style>
-                      <class name="dim-label"/>
-                    </style>
                   </object>
                   <packing>
                     <property name="expand">False</property>
@@ -342,7 +340,7 @@
                       <object class="GtkImage">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="icon_name">warning</property>
+                        <property name="icon_name">dialog-warning-symbolic</property>
                         <property name="icon_size">3</property>
                       </object>
                       <packing>
@@ -360,9 +358,6 @@
                         <property name="label" translatable="yes">Keyboards and mouses may not be able to wakeup on their own (on keystroke or motion) after being put to sleep. Hardware support varies. Be careful not to disable your only means of input into your computer!</property>
                         <property name="wrap">True</property>
                         <property name="max_width_chars">80</property>
-                        <style>
-                          <class name="dim-label"/>
-                        </style>
                       </object>
                       <packing>
                         <property name="expand">False</property>

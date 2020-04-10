@@ -325,6 +325,7 @@ impl GPApplication {
             }
             ),
         );
+        button.set_valign(gtk::Align::Center);
         main_box.add(&button);
         cb_box.set_valign(gtk::Align::Center);
         cb_box.append_text("0 seconds");
