@@ -1,7 +1,8 @@
 [Desktop Entry]
 Name=GPower Tweaks
-Categories=Settings;System;HardwareSettings;Utility;GTK;
+Categories=Settings;HardwareSettings;GTK;
 Comment=Tweak various power-related settings
+Icon=applications-system-symbolic
 Exec=gpower-tweaks
 Keywords=GPower;Tweaks;Power;
 StartupNotify=true
