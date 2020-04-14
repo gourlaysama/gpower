@@ -20,6 +20,12 @@ GPower Tweaks is build with meson and requires the following to build:
 - GTK 3.22 or later  (`gtk3-devel` on RHEL/Fedora, `libgtk-3-dev` on Debian/Ubuntu)
 - Meson build system
 
+GPower Tweaks requires the following to run:
+
+- GTK 3.22 or later
+- PolicyKit
+- Gvfs
+
 Install it from source with:
 
 ```sh
