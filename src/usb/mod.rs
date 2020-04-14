@@ -110,7 +110,7 @@ impl UsbDevice {
         self.delay = delay;
     }
 
-    pub fn save(&self) -> Result<()> {
+    pub async fn save(&self) -> Result<()> {
         let control_path = self.char_device_path.join("power/control");
         let autosuspend_delay_path = self.char_device_path.join("power/autosuspend_delay_ms");
 
@@ -128,8 +128,8 @@ impl UsbDevice {
             autosuspend_delay_text
         );
 
-        write_string_privileged(&control_path, control_text)?;
-        write_string_privileged(&autosuspend_delay_path, autosuspend_delay_text)?;
+        write_string_privileged(&control_path, control_text).await?;
+        write_string_privileged(&autosuspend_delay_path, autosuspend_delay_text).await?;
 
         Ok(())
     }

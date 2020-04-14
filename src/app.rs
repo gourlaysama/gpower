@@ -1,22 +1,24 @@
 use crate::usb::{self, UsbDevice};
+use anyhow::Result;
 use gio::prelude::*;
 use gio::subclass::prelude::ApplicationImpl;
 use glib::subclass::{self, prelude::*};
 use glib::translate::*;
 use glib::{clone, glib_object_subclass, glib_object_wrapper, glib_wrapper};
-
 use glib::{MainContext, Receiver, Sender};
 use gtk::prelude::*;
 use gtk::subclass::application::GtkApplicationImpl;
 use gtk_macros::*;
 use log::*;
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Duration;
 
 #[derive(Clone, Debug)]
 pub enum Action {
     ApplyChanges,
     Refresh,
+    ResetChanged,
     SetAutoSuspend(u32, bool),
     SetAutoSuspendDelay(gtk::ComboBoxText, u32, String),
     ShowPane(String),
@@ -25,7 +27,7 @@ pub enum Action {
 pub struct GPInnerApplication {
     sender: Sender<Action>,
     receiver: RefCell<Option<Receiver<Action>>>,
-    state: RefCell<State>,
+    state: Rc<RefCell<State>>,
     builder: RefCell<Option<gtk::Builder>>,
 }
 
@@ -36,12 +38,12 @@ struct State {
 }
 
 impl State {
-    fn new(devices: Vec<UsbDevice>) -> RefCell<Self> {
-        RefCell::new(State {
+    fn new(devices: Vec<UsbDevice>) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(State {
             devices,
             changed: false,
             errors: 0,
-        })
+        }))
     }
 }
 
@@ -390,11 +392,21 @@ impl GPApplication {
 
         match action {
             Action::ApplyChanges => {
-                for d in &inner.state.borrow().devices {
-                    d.save().expect("failed to save");
-                }
-                inner.reset_changed();
+                spawn!({
+                    let state = inner.state.clone();
+                    let sender = inner.sender.clone();
+                    async move {
+                        match apply_changes(state).await {
+                            Ok(()) => {
+                                info!("successfully applied changes");
+                                send!(sender, Action::ResetChanged);
+                            }
+                            Err(e) => error!("error applying changes: {}", e),
+                        }
+                    }
+                });
             }
+            Action::ResetChanged => inner.reset_changed(),
             Action::Refresh => {
                 get_widget!(
                     inner.builder.borrow().as_ref().unwrap(),
@@ -467,4 +479,12 @@ impl GPApplication {
 
         glib::Continue(true)
     }
+}
+
+async fn apply_changes(state: Rc<RefCell<State>>) -> Result<()> {
+    for d in &state.borrow().devices {
+        d.save().await?;
+    }
+
+    Ok(())
 }

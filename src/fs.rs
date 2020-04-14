@@ -1,20 +1,18 @@
 use anyhow::*;
 use gio::prelude::*;
+use gio::IOErrorEnum;
 use log::*;
 use std::path::Path;
 
-pub fn write_string_privileged(path: &Path, content: String) -> Result<()> {
-    write_privileged(&path, move |stream| {
-        stream
-            .write(content.as_bytes(), Some(&gio::Cancellable::new()))
-            .unwrap();
-    })
+pub async fn write_string_privileged(path: &Path, content: String) -> Result<()> {
+    let stream = write_privileged(&path).await?;
+
+    stream.write_all_async_future(content, glib::source::PRIORITY_DEFAULT).await.map_err(|a| a.1)?;
+
+    Ok(())
 }
 
-pub fn write_privileged<F>(path: &Path, func: F) -> Result<()>
-where
-    F: FnOnce(gio::FileOutputStream) + Send + 'static,
-{
+pub async fn write_privileged(path: &Path) -> Result<gio::FileOutputStream> {
     trace!(
         "trying to do a privileged write to {}",
         path.to_str().unwrap_or_default()
@@ -31,22 +29,25 @@ where
         .get_file_for_uri(&admin_path)
         .ok_or_else(|| anyhow!("gio file error for {}", admin_path))?;
 
-    file.mount_enclosing_volume(
+    let m = file.mount_enclosing_volume_future(
         gio::MountMountFlags::NONE,
         Some(&gio::MountOperation::new()),
-        Some(&gio::Cancellable::new()),
-        glib::clone!(@strong file => move |_| {
-            let stream = file
-                .replace(
-                    None,
-                    false,
-                    gio::FileCreateFlags::NONE,
-                    Some(&gio::Cancellable::new()),
-                ).unwrap();
-
-                func(stream);
-        }),
     );
 
-    Ok(())
+    if let Err(e) = m.await {
+        match e.kind::<IOErrorEnum>() {
+            Some(IOErrorEnum::AlreadyMounted) => {}
+            Some(IOErrorEnum::PermissionDenied) => {}
+            _ => bail!(e),
+        }
+    }
+
+    let stream = file.replace_async_future(
+        None,
+        false,
+        gio::FileCreateFlags::NONE,
+        glib::source::PRIORITY_DEFAULT,
+    ).await?;
+
+    Ok(stream)
 }
