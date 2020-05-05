@@ -87,16 +87,36 @@ impl GPInnerApplication {
             gtk::Label,
             label_usb_summary
         );
+        get_widget!(
+            self.builder.borrow().as_ref().unwrap(),
+            gtk::Label,
+            label_pci_summary
+        );
 
-        let usb_devices = &self.state.borrow().usb_devices;
-        let mut suspendable_count = 0;
-        for d in usb_devices {
+        let state = &self.state.borrow();
+        let mut usb_suspendable_count = 0;
+        for d in &state.usb_devices {
             if d.can_autosuspend() {
-                suspendable_count += 1;
+                usb_suspendable_count += 1;
+            }
+        }
+        let mut pci_suspendable_count = 0;
+        for d in &state.pci_devices {
+            if d.can_autosuspend() {
+                pci_suspendable_count += 1;
             }
         }
 
-        label_usb_summary.set_text(&format!("{} / {}", suspendable_count, usb_devices.len()));
+        label_usb_summary.set_text(&format!(
+            "{} / {}",
+            usb_suspendable_count,
+            &state.usb_devices.len()
+        ));
+        label_pci_summary.set_text(&format!(
+            "{} / {}",
+            pci_suspendable_count,
+            &state.pci_devices.len()
+        ));
     }
 }
 
@@ -415,7 +435,7 @@ impl GPApplication {
         let label_main = gtk::Label::new(Some(&device.get_name()));
         let label_type = gtk::Label::new(Some(&device.get_kind_description()));
         let label_info = gtk::Label::new(Some(&device.get_description()));
-        
+
         label_info.get_style_context().add_class("desc_label");
         label_info.get_style_context().add_class("dim-label");
         label_type.get_style_context().add_class("type_label");
