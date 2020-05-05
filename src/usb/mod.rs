@@ -1,10 +1,8 @@
-mod db;
-
+use crate::db::{parse_db, Db};
 use crate::fs::write_string_privileged;
 use anyhow::*;
-use db::parse_all;
 use log::*;
-use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs;
 use std::os::linux::fs::*;
 use std::path::PathBuf;
@@ -13,8 +11,8 @@ use std::path::PathBuf;
 pub struct UsbDevice {
     id: u32,
     char_device_path: PathBuf,
-    vendor_id: Option<u32>,
-    product_id: Option<u32>,
+    vendor_id: Option<u16>,
+    product_id: Option<u16>,
     db_vendor_name: Option<String>,
     db_product_name: Option<String>,
     product_name: Option<String>,
@@ -37,7 +35,7 @@ impl UsbDevice {
             manufacturer_name: None,
             autosuspend: false,
             delay: 0,
-            kind: UsbKind::Unknown,
+            kind: UsbKind::default(),
         }
     }
 
@@ -61,7 +59,7 @@ impl UsbDevice {
             .or_else(|| self.product_name.as_ref())
         {
             desc.push_str(&product);
-        } else if let UsbKind::Hub = self.kind {
+        } else if self.kind.class == 0x09 {
             desc.push_str("Hub");
         }
 
@@ -98,8 +96,8 @@ impl UsbDevice {
         self.delay
     }
 
-    pub fn kind(&self) -> UsbKind {
-        self.kind
+    pub fn kind(&self) -> &UsbKind {
+        &self.kind
     }
 
     pub fn set_autosuspend(&mut self, autosuspend: bool) {
@@ -135,18 +133,49 @@ impl UsbDevice {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum UsbKind {
-    Hub,
-    Unknown,
+#[derive(Clone, Debug)]
+pub struct UsbKind {
+    pub class: u16,
+    pub subclass: u16,
+    pub class_name: Option<String>,
+    pub subclass_name: Option<String>,
 }
 
 impl UsbKind {
-    fn from_device_class(class: u16) -> UsbKind {
-        match class {
-            9 => UsbKind::Hub,
-            _ => UsbKind::Unknown,
+    pub fn new(class: u16, subclass: u16) -> Self {
+        UsbKind {
+            class,
+            subclass,
+            class_name: None,
+            subclass_name: None,
         }
+    }
+}
+
+impl Default for UsbKind {
+    fn default() -> Self {
+        UsbKind {
+            class: 0,
+            subclass: 0,
+            class_name: None,
+            subclass_name: None,
+        }
+    }
+}
+
+impl Display for UsbKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        if let Some(class) = &self.class_name {
+            f.write_str(&class)?;
+        } else {
+            write!(f, "{:#04x}", self.class)?;
+        }
+        if let Some(subclass) = &self.subclass_name {
+            write!(f, ": {}", subclass)?;
+        } else {
+            write!(f, ": {:#04x}", self.subclass)?;
+        }
+        Ok(())
     }
 }
 
@@ -160,13 +189,14 @@ macro_rules! match_warn {
 }
 
 pub fn list_devices() -> Result<Vec<UsbDevice>> {
-    let db = make_usb_db()
+    let db = parse_db("/usr/share/hwdata/usb.ids")
         .map_err(|e| {
-            warn!("Ignoring error parting db: {}", e);
+            warn!("Ignoring error parsing db: {}", e);
         })
         .ok();
 
     debug!("listing usb devices");
+    trace!("with {} classes", db.as_ref().unwrap().classes.len());
 
     let mut devices = Vec::new();
 
@@ -192,10 +222,7 @@ pub fn list_devices() -> Result<Vec<UsbDevice>> {
     Ok(devices)
 }
 
-fn make_device(
-    entry: std::fs::DirEntry,
-    usb_db: Option<&HashMap<u32, db::Vendor>>,
-) -> Result<UsbDevice> {
+fn make_device(entry: std::fs::DirEntry, usb_db: Option<&Db>) -> Result<UsbDevice> {
     let m = entry.metadata()?;
     let rdev = m.st_rdev().to_ne_bytes();
     let major = rdev[1];
@@ -207,19 +234,20 @@ fn make_device(
     let product_path = char_path.join("idProduct");
     let product_name_path = char_path.join("product");
     let class_path = char_path.join("bDeviceClass");
+    let subclass_path = char_path.join("bDeviceSubClass");
     let control = char_path.join("power/control");
     let autosuspend_delay = char_path.join("power/autosuspend_delay_ms");
     let id = major as u32 | ((minor as u32) << 16);
     let mut usb_device = UsbDevice::from(char_path, id);
 
     if let Ok(vendor) = fs::read_to_string(&vendor_path) {
-        let vendor_id = u32::from_str_radix(&vendor.trim(), 16)?;
+        let vendor_id = u16::from_str_radix(&vendor.trim(), 16)?;
         usb_device.vendor_id = Some(vendor_id);
-        if let Some(vendor) = usb_db.and_then(|db| db.get(&vendor_id)) {
+        if let Some(vendor) = usb_db.and_then(|db| db.vendors.get(&vendor_id)) {
             usb_device.db_vendor_name = Some(vendor.name.trim().to_string());
 
             if let Ok(product) = fs::read_to_string(&product_path) {
-                let product_id = u32::from_str_radix(&product.trim(), 16)?;
+                let product_id = u16::from_str_radix(&product.trim(), 16)?;
                 usb_device.product_id = Some(product_id);
                 if let Some(product) = vendor.devices.get(&product_id) {
                     usb_device.db_product_name = Some(product.trim().to_string());
@@ -233,8 +261,16 @@ fn make_device(
     }
 
     if let Ok(class_str) = fs::read_to_string(&class_path) {
-        if let Ok(class_id) = u16::from_str_radix(class_str.trim(), 16) {
-            usb_device.kind = UsbKind::from_device_class(class_id);
+        if let Ok(class_id) = u16::from_str_radix(&class_str.trim(), 16) {
+            if let Some(c) = usb_db.and_then(|db| db.classes.get(&class_id)) {
+                usb_device.kind.class_name = Some(c.name.clone());
+                if let Ok(subclass_str) = fs::read_to_string(&subclass_path) {
+                    if let Ok(subclass_id) = u16::from_str_radix(&subclass_str.trim(), 16) {
+                        usb_device.kind.subclass_name =
+                            c.subclasses.get(&subclass_id).map(|s| s.trim().to_string());
+                    }
+                }
+            }
         }
     }
 
@@ -254,12 +290,4 @@ fn make_device(
     }
 
     Ok(usb_device)
-}
-
-fn make_usb_db() -> Result<HashMap<u32, db::Vendor>> {
-    debug!("parsing usb product db");
-    let db_content = std::fs::read("/usr/share/hwdata/usb.ids")?;
-    let (db_str, _, _) = encoding_rs::WINDOWS_1252.decode(&db_content);
-
-    parse_all(&db_str)
 }

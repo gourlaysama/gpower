@@ -7,7 +7,10 @@ use std::path::Path;
 pub async fn write_string_privileged(path: &Path, content: String) -> Result<()> {
     let stream = write_privileged(&path).await?;
 
-    stream.write_all_async_future(content, glib::source::PRIORITY_DEFAULT).await.map_err(|a| a.1)?;
+    stream
+        .write_all_async_future(content, glib::source::PRIORITY_DEFAULT)
+        .await
+        .map_err(|a| a.1)?;
 
     Ok(())
 }
@@ -42,12 +45,14 @@ pub async fn write_privileged(path: &Path) -> Result<gio::FileOutputStream> {
         }
     }
 
-    let stream = file.replace_async_future(
-        None,
-        false,
-        gio::FileCreateFlags::NONE,
-        glib::source::PRIORITY_DEFAULT,
-    ).await?;
+    let stream = file
+        .replace_async_future(
+            None,
+            false,
+            gio::FileCreateFlags::NONE,
+            glib::source::PRIORITY_DEFAULT,
+        )
+        .await?;
 
     Ok(stream)
 }
