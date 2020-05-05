@@ -196,7 +196,6 @@ pub fn list_devices() -> Result<Vec<UsbDevice>> {
         .ok();
 
     debug!("listing usb devices");
-    trace!("with {} classes", db.as_ref().unwrap().classes.len());
 
     let mut devices = Vec::new();
 

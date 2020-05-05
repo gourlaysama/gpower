@@ -20,6 +20,10 @@
     font-size: 0.8em;
 }
 
+.type_label {
+    font-weight: bold;
+}
+
 /* .error .combo {
     border-color: rgb(255, 60, 60);
 } */

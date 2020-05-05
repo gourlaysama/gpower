@@ -1,3 +1,4 @@
+use crate::pci::{self, PciDevice};
 use crate::usb::{self, UsbDevice};
 use anyhow::Result;
 use gio::prelude::*;
@@ -19,8 +20,10 @@ pub enum Action {
     ApplyChanges,
     Refresh,
     ResetChanged,
-    SetAutoSuspend(u32, bool),
-    SetAutoSuspendDelay(gtk::ComboBoxText, u32, String),
+    SetUsbAutoSuspend(u32, bool),
+    SetUsbAutoSuspendDelay(gtk::ComboBoxText, u32, String),
+    SetPciAutoSuspend(String, bool),
+    SetPciAutoSuspendDelay(gtk::ComboBoxText, String, String),
     ShowPane(String),
 }
 
@@ -32,15 +35,17 @@ pub struct GPInnerApplication {
 }
 
 struct State {
-    devices: Vec<UsbDevice>,
+    usb_devices: Vec<UsbDevice>,
+    pci_devices: Vec<PciDevice>,
     changed: bool,
     errors: u16,
 }
 
 impl State {
-    fn new(devices: Vec<UsbDevice>) -> Rc<RefCell<Self>> {
+    fn new(usb_devices: Vec<UsbDevice>, pci_devices: Vec<PciDevice>) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(State {
-            devices,
+            usb_devices,
+            pci_devices,
             changed: false,
             errors: 0,
         }))
@@ -83,15 +88,15 @@ impl GPInnerApplication {
             label_usb_summary
         );
 
-        let devices = &self.state.borrow().devices;
+        let usb_devices = &self.state.borrow().usb_devices;
         let mut suspendable_count = 0;
-        for d in devices {
+        for d in usb_devices {
             if d.can_autosuspend() {
                 suspendable_count += 1;
             }
         }
 
-        label_usb_summary.set_text(&format!("{} / {}", suspendable_count, devices.len()));
+        label_usb_summary.set_text(&format!("{} / {}", suspendable_count, usb_devices.len()));
     }
 }
 
@@ -105,14 +110,21 @@ impl ObjectSubclass for GPInnerApplication {
 
     fn new() -> Self {
         debug!("initializing GPInnerApplication");
-        let devices = match usb::list_devices() {
+        let usb_devices = match usb::list_devices() {
             Ok(d) => d,
             Err(e) => {
                 error!("failed to load devices: {}", e);
                 Vec::new()
             }
         };
-        let state = State::new(devices);
+        let pci_devices = match pci::list_devices() {
+            Ok(d) => d,
+            Err(e) => {
+                error!("failed to load devices: {}", e);
+                Vec::new()
+            }
+        };
+        let state = State::new(usb_devices, pci_devices);
 
         let (sender, receiver) = MainContext::channel(glib::PRIORITY_DEFAULT);
 
@@ -241,11 +253,20 @@ impl GPApplication {
         usb_row.add(&label);
         usb_row.set_action_name(Some("win.show_usb"));
         category_list.add(&usb_row);
+        let label = gtk::Label::new_with_mnemonic(Some("_PCI Autosuspend"));
+        label.set_margin_top(6);
+        label.set_margin_bottom(6);
+        label.set_margin_start(18);
+        label.set_halign(gtk::Align::Start);
+        let pci_row = gtk::ListBoxRow::new();
+        pci_row.add(&label);
+        pci_row.set_action_name(Some("win.show_pci"));
+        category_list.add(&pci_row);
 
         action!(
             win,
             "show_summary",
-            clone!(@strong inner.sender as sender, @strong summary_row, @strong category_list => move |_,_| {
+            clone!(@strong inner.sender as sender, @strong category_list => move |_,_| {
                 debug!("showing summary pane");
                 send!(sender, Action::ShowPane("summary_pane".to_owned()));
                 category_list.select_row(Some(&summary_row));
@@ -255,18 +276,32 @@ impl GPApplication {
         action!(
             win,
             "show_usb",
-            clone!(@strong inner.sender as sender, @strong usb_row, @strong category_list => move |_,_| {
+            clone!(@strong inner.sender as sender, @strong category_list => move |_,_| {
                 debug!("showing usb pane");
                 send!(sender, Action::ShowPane("usb_pane".to_owned()));
                 category_list.select_row(Some(&usb_row));
             })
         );
-        get_widget!(builder, gtk::ListBox, main_list_box);
 
-        self.fill_usb_list(&main_list_box);
+        action!(
+            win,
+            "show_pci",
+            clone!(@strong inner.sender as sender, @strong category_list => move |_,_| {
+                debug!("showing pci pane");
+                send!(sender, Action::ShowPane("pci_pane".to_owned()));
+                category_list.select_row(Some(&pci_row));
+            })
+        );
+        get_widget!(builder, gtk::ListBox, main_usb_list_box);
+        get_widget!(builder, gtk::ListBox, main_pci_list_box);
+
+        self.fill_list(&main_usb_list_box, &main_pci_list_box);
 
         get_widget!(builder, gtk::ScrolledWindow, usb_scroll);
-        usb_scroll.add(&main_list_box);
+        usb_scroll.add(&main_usb_list_box);
+
+        get_widget!(builder, gtk::ScrolledWindow, pci_scroll);
+        pci_scroll.add(&main_pci_list_box);
 
         inner.builder.replace(Some(builder));
 
@@ -275,23 +310,27 @@ impl GPApplication {
         win
     }
 
-    fn fill_usb_list(&self, main_list_box: &gtk::ListBox) {
+    fn fill_list(&self, main_usb_list_box: &gtk::ListBox, main_pci_list_box: &gtk::ListBox) {
         let inner = GPInnerApplication::from_instance(self);
 
         let mut entries = Vec::new();
-        for d in inner.state.borrow().devices.iter() {
+        for d in inner.state.borrow().usb_devices.iter() {
             entries.push(self.build_usb_entry(&d, inner));
         }
         for e in entries {
-            main_list_box.add(&e);
+            main_usb_list_box.add(&e);
+        }
+
+        let mut entries = Vec::new();
+        for d in inner.state.borrow().pci_devices.iter() {
+            entries.push(self.build_pci_entry(&d, inner));
+        }
+        for e in entries {
+            main_pci_list_box.add(&e);
         }
     }
 
-    fn build_usb_entry(
-        &self,
-        device: &usb::UsbDevice,
-        app: &GPInnerApplication,
-    ) -> gtk::ListBoxRow {
+    fn build_usb_entry(&self, device: &UsbDevice, app: &GPInnerApplication) -> gtk::ListBoxRow {
         let row = gtk::ListBoxRow::new();
         row.set_can_focus(false);
         let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
@@ -314,9 +353,9 @@ impl GPApplication {
         let id = device.get_id();
         button.connect_state_set(
             clone!(@strong app.sender as sender, @strong cb_box as cb, @strong self as app => move |_, on| {
-                send!(sender, Action::SetAutoSuspend(id, on));
+                send!(sender, Action::SetUsbAutoSuspend(id, on));
                 if on {
-                    send!(sender, Action::SetAutoSuspendDelay(cb.clone(),
+                    send!(sender, Action::SetUsbAutoSuspendDelay(cb.clone(),
                     id,
                     cb.get_active_text().map(|s| s.as_str().to_owned()).unwrap_or_else(String::new),
                 ));
@@ -349,8 +388,92 @@ impl GPApplication {
         cb_box.append_text("1 minute");
         cb_box.append_text("5 minutes");
         cb_box.connect_changed(clone!(@strong app.sender as sender => move |cb| {
-            send!(sender, Action::SetAutoSuspendDelay(cb.clone(),
+            send!(sender, Action::SetUsbAutoSuspendDelay(cb.clone(),
                 id,
+                cb.get_active_text().map(|s| s.as_str().to_owned()).unwrap_or_else(String::new),
+            ));
+        }));
+        main_box.add(&cb_box);
+        button
+            .bind_property("active", &cb_box, "sensitive")
+            .flags(
+                glib::BindingFlags::DEFAULT
+                    | glib::BindingFlags::SYNC_CREATE
+                    | glib::BindingFlags::BIDIRECTIONAL,
+            )
+            .build();
+        row.add(&main_box);
+        row
+    }
+
+    fn build_pci_entry(&self, device: &PciDevice, app: &GPInnerApplication) -> gtk::ListBoxRow {
+        let row = gtk::ListBoxRow::new();
+        row.set_can_focus(false);
+        let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        let text_box = gtk::Box::new(gtk::Orientation::Vertical, 3);
+        let desc_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        let label_main = gtk::Label::new(Some(&device.get_name()));
+        let label_type = gtk::Label::new(Some(&device.get_kind_description()));
+        let label_info = gtk::Label::new(Some(&device.get_description()));
+        
+        label_info.get_style_context().add_class("desc_label");
+        label_info.get_style_context().add_class("dim-label");
+        label_type.get_style_context().add_class("type_label");
+        label_type.get_style_context().add_class("desc_label");
+        label_type.get_style_context().add_class("dim-label");
+
+        text_box.add(&label_main);
+        desc_box.add(&label_type);
+        desc_box.add(&label_info);
+        text_box.add(&desc_box);
+        text_box.set_valign(gtk::Align::Center);
+        text_box.set_halign(gtk::Align::Start);
+        label_info.set_halign(gtk::Align::Start);
+        label_main.set_halign(gtk::Align::Start);
+        main_box.pack_start(&text_box, true, true, 0);
+        let cb_box = gtk::ComboBoxText::new_with_entry();
+        let button = gtk::Switch::new();
+        button.set_active(device.can_autosuspend());
+        let id = device.get_id().to_owned();
+        button.connect_state_set(
+            clone!(@strong app.sender as sender, @strong cb_box as cb, @strong self as app, @strong id => move |_, on| {
+                send!(sender, Action::SetPciAutoSuspend(id.clone(), on));
+                if on {
+                    send!(sender, Action::SetPciAutoSuspendDelay(cb.clone(),
+                    id.clone(),
+                    cb.get_active_text().map(|s| s.as_str().to_owned()).unwrap_or_else(String::new),
+                ));
+                } else {
+                    app.set_error(&cb, None);
+                }
+                glib::signal::Inhibit(false)
+            }
+            ),
+        );
+        button.set_valign(gtk::Align::Center);
+        main_box.add(&button);
+        cb_box.set_valign(gtk::Align::Center);
+        cb_box.append_text("0 seconds");
+        let delay = device.delay();
+        let autosuspend = device.can_autosuspend();
+        cb_box.set_sensitive(autosuspend);
+
+        if autosuspend && delay != 0 {
+            cb_box
+                .append_text(&humantime::format_duration(Duration::from_millis(delay)).to_string());
+            cb_box.set_active(Some(1));
+        } else {
+            cb_box.set_active(Some(0));
+        }
+        cb_box.append_text("1 second");
+        cb_box.append_text("2 seconds");
+        cb_box.append_text("5 seconds");
+        cb_box.append_text("20 seconds");
+        cb_box.append_text("1 minute");
+        cb_box.append_text("5 minutes");
+        cb_box.connect_changed(clone!(@strong app.sender as sender => move |cb| {
+            send!(sender, Action::SetPciAutoSuspendDelay(cb.clone(),
+                id.clone(),
                 cb.get_active_text().map(|s| s.as_str().to_owned()).unwrap_or_else(String::new),
             ));
         }));
@@ -411,10 +534,10 @@ impl GPApplication {
                 get_widget!(
                     inner.builder.borrow().as_ref().unwrap(),
                     gtk::ListBox,
-                    main_list_box
+                    main_usb_list_box
                 );
-                main_list_box.foreach(clone!(@weak main_list_box => move |item| {
-                    main_list_box.remove(item);
+                main_usb_list_box.foreach(clone!(@weak main_usb_list_box => move |item| {
+                    main_usb_list_box.remove(item);
                 }));
                 let devices = match usb::list_devices() {
                     Ok(d) => d,
@@ -423,14 +546,33 @@ impl GPApplication {
                         Vec::new()
                     }
                 };
-                inner.state.borrow_mut().devices = devices;
-                self.fill_usb_list(&main_list_box);
-                main_list_box.show_all();
+                inner.state.borrow_mut().usb_devices = devices;
+
+                get_widget!(
+                    inner.builder.borrow().as_ref().unwrap(),
+                    gtk::ListBox,
+                    main_pci_list_box
+                );
+                main_pci_list_box.foreach(clone!(@weak main_pci_list_box => move |item| {
+                    main_pci_list_box.remove(item);
+                }));
+                let devices = match pci::list_devices() {
+                    Ok(d) => d,
+                    Err(e) => {
+                        error!("failed to load devices: {}", e);
+                        Vec::new()
+                    }
+                };
+                inner.state.borrow_mut().pci_devices = devices;
+
+                self.fill_list(&main_usb_list_box, &main_pci_list_box);
+                main_usb_list_box.show_all();
+                main_pci_list_box.show_all();
 
                 inner.reset_changed();
             }
-            Action::SetAutoSuspend(id, autosuspend) => {
-                for d in inner.state.borrow_mut().devices.iter_mut() {
+            Action::SetUsbAutoSuspend(id, autosuspend) => {
+                for d in inner.state.borrow_mut().usb_devices.iter_mut() {
                     if d.get_id() == id {
                         d.set_autosuspend(autosuspend);
                     }
@@ -438,11 +580,38 @@ impl GPApplication {
 
                 inner.set_changed();
             }
-            Action::SetAutoSuspendDelay(source, id, delay) => {
+            Action::SetUsbAutoSuspendDelay(source, id, delay) => {
                 match humantime::parse_duration(&delay) {
                     Ok(duration) => {
                         self.set_error(&source, None);
-                        for d in inner.state.borrow_mut().devices.iter_mut() {
+                        for d in inner.state.borrow_mut().usb_devices.iter_mut() {
+                            if d.get_id() == id {
+                                // TODO: use u128 eveywhere for delay?
+                                d.set_autosuspend_delay(duration.as_millis() as u64);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        self.set_error(&source, Some(&format!("{}", e)));
+                    }
+                }
+
+                inner.set_changed();
+            }
+            Action::SetPciAutoSuspend(id, autosuspend) => {
+                for d in inner.state.borrow_mut().pci_devices.iter_mut() {
+                    if d.get_id() == id {
+                        d.set_autosuspend(autosuspend);
+                    }
+                }
+
+                inner.set_changed();
+            }
+            Action::SetPciAutoSuspendDelay(source, id, delay) => {
+                match humantime::parse_duration(&delay) {
+                    Ok(duration) => {
+                        self.set_error(&source, None);
+                        for d in inner.state.borrow_mut().pci_devices.iter_mut() {
                             if d.get_id() == id {
                                 // TODO: use u128 eveywhere for delay?
                                 d.set_autosuspend_delay(duration.as_millis() as u64);
@@ -470,8 +639,9 @@ impl GPApplication {
         if log_enabled!(Level::Trace) {
             let state = inner.state.borrow();
             trace!(
-                "current state: {} usb devices, {} errors, changed is {}",
-                state.devices.len(),
+                "current state: {} usb devices, {} pci devices, {} errors, changed is {}",
+                state.usb_devices.len(),
+                state.pci_devices.len(),
                 state.errors,
                 state.changed
             );
@@ -482,7 +652,11 @@ impl GPApplication {
 }
 
 async fn apply_changes(state: Rc<RefCell<State>>) -> Result<()> {
-    for d in &state.borrow().devices {
+    for d in &state.borrow().usb_devices {
+        d.save().await?;
+    }
+
+    for d in &state.borrow().pci_devices {
         d.save().await?;
     }
 

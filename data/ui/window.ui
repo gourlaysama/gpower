@@ -12,13 +12,6 @@
     <property name="can_focus">False</property>
     <property name="icon_name">view-more-horizontal-symbolic</property>
   </object>
-  <object class="GtkListBox" id="main_list_box">
-    <property name="name">main_list_box</property>
-    <property name="visible">True</property>
-    <property name="can_focus">False</property>
-    <property name="valign">start</property>
-    <property name="selection_mode">none</property>
-  </object>
   <object class="GtkPopoverMenu" id="main_menu">
     <property name="width_request">140</property>
     <property name="can_focus">False</property>
@@ -379,6 +372,74 @@
                 <property name="position">1</property>
               </packing>
             </child>
+            <child>
+              <object class="GtkBox">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="halign">center</property>
+                <property name="margin_top">12</property>
+                <property name="margin_bottom">6</property>
+                <property name="orientation">vertical</property>
+                <property name="spacing">10</property>
+                <child>
+                  <object class="GtkScrolledWindow" id="pci_scroll">
+                    <property name="height_request">580</property>
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="halign">center</property>
+                    <property name="hscrollbar_policy">never</property>
+                    <child>
+                      <placeholder/>
+                    </child>
+                    <style>
+                      <class name="list_box"/>
+                    </style>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                    <property name="pack_type">end</property>
+                    <property name="position">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="label_pci_pane_title">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="label" translatable="yes">Auto-suspend when idle</property>
+                    <attributes>
+                      <attribute name="weight" value="bold"/>
+                    </attributes>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="margin_top">6</property>
+                    <property name="label" translatable="yes">PCI devices can be automatically suspended when the kernel detects they have been idle for a length on time.</property>
+                    <property name="wrap">True</property>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">2</property>
+                  </packing>
+                </child>
+              </object>
+              <packing>
+                <property name="name">pci_pane</property>
+                <property name="title" translatable="yes">page0</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
           </object>
           <packing>
             <property name="expand">True</property>
@@ -431,5 +492,19 @@
         </child>
       </object>
     </child>
+  </object>
+  <object class="GtkListBox" id="main_pci_list_box">
+    <property name="name">main_list_box</property>
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="valign">start</property>
+    <property name="selection_mode">none</property>
+  </object>
+  <object class="GtkListBox" id="main_usb_list_box">
+    <property name="name">main_list_box</property>
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <property name="valign">start</property>
+    <property name="selection_mode">none</property>
   </object>
 </interface>
