@@ -261,10 +261,12 @@ fn make_device(entry: std::fs::DirEntry, usb_db: Option<&Db>) -> Result<UsbDevic
 
     if let Ok(class_str) = fs::read_to_string(&class_path) {
         if let Ok(class_id) = u16::from_str_radix(&class_str.trim(), 16) {
+            usb_device.kind.class = class_id;
             if let Some(c) = usb_db.and_then(|db| db.classes.get(&class_id)) {
                 usb_device.kind.class_name = Some(c.name.clone());
                 if let Ok(subclass_str) = fs::read_to_string(&subclass_path) {
                     if let Ok(subclass_id) = u16::from_str_radix(&subclass_str.trim(), 16) {
+                        usb_device.kind.subclass = subclass_id;
                         usb_device.kind.subclass_name =
                             c.subclasses.get(&subclass_id).map(|s| s.trim().to_string());
                     }
