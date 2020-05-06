@@ -96,6 +96,14 @@ impl UsbDevice {
         self.delay
     }
 
+    pub fn get_kind_description(&self) -> String {
+        if let Some(class) = &self.kind.class_name {
+            class.clone()
+        } else {
+            String::new()
+        }
+    }
+
     pub fn kind(&self) -> &UsbKind {
         &self.kind
     }

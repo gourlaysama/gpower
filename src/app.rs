@@ -355,12 +355,21 @@ impl GPApplication {
         row.set_can_focus(false);
         let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
         let text_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let desc_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         let label_main = gtk::Label::new(Some(&device.get_name()));
+        let label_type = gtk::Label::new(Some(&device.get_kind_description()));
         let label_info = gtk::Label::new(Some(&device.get_description()));
+
         label_info.get_style_context().add_class("desc_label");
         label_info.get_style_context().add_class("dim-label");
+        label_type.get_style_context().add_class("type_label");
+        label_type.get_style_context().add_class("desc_label");
+        label_type.get_style_context().add_class("dim-label");
+
         text_box.add(&label_main);
-        text_box.add(&label_info);
+        desc_box.add(&label_type);
+        desc_box.add(&label_info);
+        text_box.add(&desc_box);
         text_box.set_valign(gtk::Align::Center);
         text_box.set_halign(gtk::Align::Start);
         text_box.set_spacing(3);
