@@ -250,8 +250,10 @@ fn make_device(path: PathBuf, pci_db: Option<&Db>) -> Result<PciDevice> {
                 let mut kind = PciKind::new(class_id, subclass_id);
                 if let Some(c) = pci_db.and_then(|db| db.classes.get(&class_id)) {
                     kind.class_name = Some(c.name.clone());
-                    kind.subclass_name =
-                        c.subclasses.get(&subclass_id).map(|s| s.trim().to_string());
+                    kind.subclass_name = c
+                        .subclasses
+                        .get(&subclass_id)
+                        .map(|s| s.name.trim().to_string());
                 }
                 pci_device.kind = kind;
             }

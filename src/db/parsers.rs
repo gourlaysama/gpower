@@ -27,21 +27,51 @@ fn name(input: &str) -> IResult<&str, (u16, &str)> {
     Ok((input, (id, name)))
 }
 
-fn parse_subentry(input: &str) -> IResult<&str, (u16, &str)> {
+fn parse_interface(input: &str) -> IResult<&str, (u16, &str)> {
     let tab = tag("\t");
+
+    let (input, (_, _, _, (interface_id, interface_name), _)) =
+        tuple((comment, &tab, &tab, name, &line_ending))(input)?;
+
+    Ok((input, (interface_id, interface_name)))
+}
+
+fn parse_subentry(input: &str) -> IResult<&str, (u16, DeviceClass)> {
+    let tab = tag("\t");
+    let mut map = HashMap::new();
 
     let (input, (_, _, (device_id, device_name), _)) =
         tuple((comment, &tab, name, &line_ending))(input)?;
 
-    let interface = tuple((comment, &tab, &tab, content, &line_ending));
-    // drop interfaces
-    let (input, _) = many0(interface)(input)?;
+    let (input, interfaces) = many0(parse_interface)(input)?;
 
-    Ok((input, (device_id, device_name)))
+    for i in interfaces {
+        map.insert(
+            i.0,
+            DeviceClass {
+                id: i.0,
+                name: i.1.to_string(),
+                subclasses: HashMap::default(),
+            },
+        );
+    }
+
+    Ok((
+        input,
+        (
+            device_id,
+            DeviceClass {
+                id: device_id,
+                name: device_name.to_string(),
+                subclasses: map,
+            },
+        ),
+    ))
 }
 
 fn parse_vendor(input: &str) -> IResult<&str, Result<Vendor, DeviceClass>> {
-    let mut map = HashMap::new();
+    let mut map_v = HashMap::new();
+    let mut map_d = HashMap::new();
     let (input, (_, class, (vendor_id, vendor_name), _)) = tuple((
         comment,
         opt(tuple((tag("C"), take_while1(|c: char| c.is_whitespace())))),
@@ -52,7 +82,11 @@ fn parse_vendor(input: &str) -> IResult<&str, Result<Vendor, DeviceClass>> {
     let (input, devices) = many0(parse_subentry)(input)?;
 
     for d in devices {
-        map.insert(d.0, d.1.to_string());
+        if class.is_none() {
+            map_v.insert(d.0, d.1.name);
+        } else {
+            map_d.insert(d.0, d.1);
+        }
     }
 
     if class.is_none() {
@@ -61,7 +95,7 @@ fn parse_vendor(input: &str) -> IResult<&str, Result<Vendor, DeviceClass>> {
             Ok(Vendor {
                 id: vendor_id,
                 name: vendor_name.to_string(),
-                devices: map,
+                devices: map_v,
             }),
         ))
     } else {
@@ -70,7 +104,7 @@ fn parse_vendor(input: &str) -> IResult<&str, Result<Vendor, DeviceClass>> {
             Err(DeviceClass {
                 id: vendor_id,
                 name: vendor_name.to_string(),
-                subclasses: map,
+                subclasses: map_d,
             }),
         ))
     }

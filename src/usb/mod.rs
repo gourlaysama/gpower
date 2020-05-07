@@ -5,7 +5,7 @@ use log::*;
 use std::fmt::Display;
 use std::fs;
 use std::os::linux::fs::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct UsbDevice {
@@ -23,10 +23,10 @@ pub struct UsbDevice {
 }
 
 impl UsbDevice {
-    fn from(char_device_path: PathBuf, id: u32) -> UsbDevice {
+    fn from(char_device_path: &Path, id: u32) -> UsbDevice {
         UsbDevice {
             id,
-            char_device_path,
+            char_device_path: char_device_path.into(),
             vendor_id: None,
             product_id: None,
             db_vendor_name: None,
@@ -97,11 +97,82 @@ impl UsbDevice {
     }
 
     pub fn get_kind_description(&self) -> String {
-        if let Some(class) = &self.kind.class_name {
-            class.clone()
-        } else {
-            String::new()
+        let mut desc = String::new();
+
+        match &self.kind.class {
+            0x05..=0x09 | 0x0b | 0x0d | 0x0e | 0xdc => {
+                if let Some(class_name) = &self.kind.class_name {
+                    desc.push_str(&class_name);
+                }
+            }
+            0x03 => {
+                if let Some(interface_name) = &self.kind.interface_name {
+                    desc.push_str(&interface_name);
+                }
+            }
+            0x01 | 0x02 | 0x58 => {
+                if let Some(class_name) = &self.kind.class_name {
+                    desc.push_str(&class_name);
+                }
+                if let Some(subclass_name) = &self.kind.subclass_name {
+                    desc.push_str(" (");
+                    desc.push_str(&subclass_name);
+                    desc.push(')');
+                }
+            }
+            0x0a => {
+                if let Some(class_name) = &self.kind.class_name {
+                    desc.push_str(&class_name);
+                }
+                if let Some(interface_name) = &self.kind.interface_name {
+                    desc.push_str(" (");
+                    desc.push_str(&interface_name);
+                    desc.push(')');
+                }
+            }
+            0xe0 => match &self.kind.subclass {
+                0x01 => {
+                    if let Some(interface_name) = &self.kind.interface_name {
+                        desc.push_str(&interface_name);
+                    }
+                }
+                0x02 => {
+                    if let Some(subclass_name) = &self.kind.subclass_name {
+                        desc.push_str(&subclass_name);
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
         }
+
+        if desc.is_empty() {
+            if self.kind.class != 0 {
+                if let Some(name) = &self.kind.class_name {
+                    desc.push_str(&name);
+                }
+            }
+            if self.kind.subclass != 0 {
+                if let Some(name) = &self.kind.subclass_name {
+                    if !desc.is_empty() {
+                        desc.push_str(", ");
+                    }
+                    desc.push_str(&name);
+                }
+            }
+            if let Some(name) = &self.kind.interface_name {
+                if !desc.is_empty() {
+                    desc.push_str(", ");
+                }
+                desc.push_str(&name);
+            }
+        }
+
+        if desc.is_empty() {
+            desc.push_str("Unknown");
+        }
+
+        desc
     }
 
     pub fn kind(&self) -> &UsbKind {
@@ -145,17 +216,21 @@ impl UsbDevice {
 pub struct UsbKind {
     pub class: u16,
     pub subclass: u16,
+    pub interface: u16,
     pub class_name: Option<String>,
     pub subclass_name: Option<String>,
+    pub interface_name: Option<String>,
 }
 
 impl UsbKind {
-    pub fn new(class: u16, subclass: u16) -> Self {
+    pub fn new(class: u16, subclass: u16, interface: u16) -> Self {
         UsbKind {
             class,
             subclass,
+            interface,
             class_name: None,
             subclass_name: None,
+            interface_name: None,
         }
     }
 }
@@ -165,8 +240,10 @@ impl Default for UsbKind {
         UsbKind {
             class: 0,
             subclass: 0,
+            interface: 0,
             class_name: None,
             subclass_name: None,
+            interface_name: None,
         }
     }
 }
@@ -216,6 +293,7 @@ pub fn list_devices() -> Result<Vec<UsbDevice>> {
                             match_warn!(entry, "ignoring error enumerating device: {}", entry => {
                                 let dev = make_device(entry, db.as_ref());
                                 match_warn!(dev, "ignoring error reading device: {}", dev => {
+                                    trace!("made device: {:?}", dev);
                                     devices.push(dev);
                                 });
                             });
@@ -227,6 +305,76 @@ pub fn list_devices() -> Result<Vec<UsbDevice>> {
     }
 
     Ok(devices)
+}
+
+fn interface_info(device: &Path) -> Result<(u16, u16, u16)> {
+    let prefix = format!(
+        "{}:",
+        device.file_name().unwrap_or_default().to_string_lossy()
+    );
+
+    let mut class = 0;
+    let mut subclass = 0;
+    let mut protocol = 0;
+
+    for entry in std::fs::read_dir(&device)? {
+        match_warn!(entry, "ignoring error while enumerating devices: {}", entry => {
+            match_warn!(entry.file_type(), "ignoring error getting type: {}", tpe => {
+                if tpe.is_dir() && entry.file_name().to_string_lossy().starts_with(&prefix) {
+                    let interface_path = entry.path();
+                    let class_path = interface_path.join("bInterfaceClass");
+                    let subclass_path = interface_path.join("bInterfaceSubClass");
+                    let protocol_path = interface_path.join("bInterfaceProtocol");
+
+                    let mut new_class = 0;
+                    let mut new_subclass = 0;
+                    let mut new_protocol = 0;
+                    if let Ok(class_str) = fs::read_to_string(&class_path) {
+                        if let Ok(class_id) = u16::from_str_radix(&class_str.trim(), 16) {
+                            new_class = class_id;
+                        }
+                    }
+
+                    if let Ok(subclass_str) = fs::read_to_string(&subclass_path) {
+                        if let Ok(subclass_id) = u16::from_str_radix(&subclass_str.trim(), 16) {
+                            new_subclass = subclass_id;
+                        }
+                    }
+
+                    if let Ok(protocol_str) = fs::read_to_string(&protocol_path) {
+                        if let Ok(protocol_id) = u16::from_str_radix(&protocol_str.trim(), 16) {
+                            new_protocol = protocol_id;
+                        }
+                    }
+
+                    // heuristic: when the current interface is a Mouse, don't override with a Keyboard
+                    if class == 0x03 && protocol == 0x02 && new_class == 0x03 && new_protocol == 0x01 {
+                        continue
+                    }
+
+                    // heuristic: don't set Application Specific Interface if there is a choice
+                    if new_class == 0xfe && class != 0 {
+                        continue
+                    }
+                    // heuristic: don't remplace by an empty subclass if possible
+                    if class == new_class && new_subclass == 0 {
+                        continue
+                    }
+                    // heuristic: don't remplace by an empty interface if possible
+                    if class == new_class && subclass == new_subclass && new_protocol == 0 {
+                        continue
+                    }
+
+                    class = new_class;
+                    subclass = new_subclass;
+
+                    protocol = new_protocol;
+                }
+            });
+        });
+    }
+
+    Ok((class, subclass, protocol))
 }
 
 fn make_device(entry: std::fs::DirEntry, usb_db: Option<&Db>) -> Result<UsbDevice> {
@@ -242,10 +390,11 @@ fn make_device(entry: std::fs::DirEntry, usb_db: Option<&Db>) -> Result<UsbDevic
     let product_name_path = char_path.join("product");
     let class_path = char_path.join("bDeviceClass");
     let subclass_path = char_path.join("bDeviceSubClass");
+    let protocol_path = char_path.join("bDeviceProtocol");
     let control = char_path.join("power/control");
     let autosuspend_delay = char_path.join("power/autosuspend_delay_ms");
     let id = major as u32 | ((minor as u32) << 16);
-    let mut usb_device = UsbDevice::from(char_path, id);
+    let mut usb_device = UsbDevice::from(&char_path, id);
 
     if let Ok(vendor) = fs::read_to_string(&vendor_path) {
         let vendor_id = u16::from_str_radix(&vendor.trim(), 16)?;
@@ -269,14 +418,48 @@ fn make_device(entry: std::fs::DirEntry, usb_db: Option<&Db>) -> Result<UsbDevic
 
     if let Ok(class_str) = fs::read_to_string(&class_path) {
         if let Ok(class_id) = u16::from_str_radix(&class_str.trim(), 16) {
-            usb_device.kind.class = class_id;
-            if let Some(c) = usb_db.and_then(|db| db.classes.get(&class_id)) {
-                usb_device.kind.class_name = Some(c.name.clone());
+            if class_id == 0x00 {
+                // we have to look into an interface to have an idea what this is
+                if let Ok((class, subclass, protocol)) = interface_info(&char_path.canonicalize()?)
+                {
+                    usb_device.kind.class = class;
+                    usb_device.kind.subclass = subclass;
+                    usb_device.kind.interface = protocol;
+                }
+            } else {
+                usb_device.kind.class = class_id;
                 if let Ok(subclass_str) = fs::read_to_string(&subclass_path) {
                     if let Ok(subclass_id) = u16::from_str_radix(&subclass_str.trim(), 16) {
                         usb_device.kind.subclass = subclass_id;
-                        usb_device.kind.subclass_name =
-                            c.subclasses.get(&subclass_id).map(|s| s.trim().to_string());
+                    }
+                }
+                if let Ok(protocol_str) = fs::read_to_string(&protocol_path) {
+                    if let Ok(protocol_id) = u16::from_str_radix(&protocol_str.trim(), 16) {
+                        usb_device.kind.interface = protocol_id;
+                    }
+                }
+
+                if class_id == 0xef
+                    && usb_device.kind.subclass == 0x02
+                    && usb_device.kind.interface == 0x01
+                {
+                    // we have to look into an interface to have an idea what this is
+                    if let Ok((class, subclass, protocol)) =
+                        interface_info(&char_path.canonicalize()?)
+                    {
+                        usb_device.kind.class = class;
+                        usb_device.kind.subclass = subclass;
+                        usb_device.kind.interface = protocol;
+                    }
+                }
+            }
+
+            if let Some(c) = usb_db.and_then(|db| db.classes.get(&usb_device.kind.class)) {
+                usb_device.kind.class_name = Some(c.name.clone());
+                if let Some(sub) = c.subclasses.get(&usb_device.kind.subclass) {
+                    usb_device.kind.subclass_name = Some(sub.name.trim().to_string());
+                    if let Some(int) = sub.subclasses.get(&usb_device.kind.interface) {
+                        usb_device.kind.interface_name = Some(int.name.trim().to_string());
                     }
                 }
             }

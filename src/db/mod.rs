@@ -21,7 +21,7 @@ pub struct Vendor {
 pub struct DeviceClass {
     pub id: u16,
     pub name: String,
-    pub subclasses: HashMap<u16, String>,
+    pub subclasses: HashMap<u16, DeviceClass>,
 }
 
 pub fn parse_db<P: AsRef<Path>>(path: P) -> Result<Db> {
