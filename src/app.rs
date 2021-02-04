@@ -5,7 +5,7 @@ use gio::prelude::*;
 use gio::subclass::prelude::ApplicationImpl;
 use glib::subclass::{self, prelude::*};
 use glib::translate::*;
-use glib::{clone, glib_object_subclass, glib_object_wrapper, glib_wrapper};
+use glib::{clone, glib_object_subclass, glib_wrapper};
 use glib::{MainContext, Receiver, Sender};
 use gtk::prelude::*;
 use gtk::subclass::application::GtkApplicationImpl;
@@ -223,7 +223,7 @@ impl GPApplication {
             &provider,
             gtk::STYLE_PROVIDER_PRIORITY_USER,
         );
-        let builder = gtk::Builder::new_from_string(include_str!("../data/ui/window.ui"));
+        let builder = gtk::Builder::from_string(include_str!("../data/ui/window.ui"));
         get_widget!(builder, gtk::ApplicationWindow, win);
         win.set_application(Some(self));
 
@@ -255,7 +255,7 @@ impl GPApplication {
         });
 
         get_widget!(builder, gtk::ListBox, category_list);
-        let label = gtk::Label::new_with_mnemonic(Some("_Summary"));
+        let label = gtk::Label::with_mnemonic(Some("_Summary"));
         label.set_margin_top(6);
         label.set_margin_bottom(6);
         label.set_margin_start(18);
@@ -264,7 +264,7 @@ impl GPApplication {
         summary_row.add(&label);
         summary_row.set_action_name(Some("win.show_summary"));
         category_list.add(&summary_row);
-        let label = gtk::Label::new_with_mnemonic(Some("_USB Autosuspend"));
+        let label = gtk::Label::with_mnemonic(Some("_USB Autosuspend"));
         label.set_margin_top(6);
         label.set_margin_bottom(6);
         label.set_margin_start(18);
@@ -273,7 +273,7 @@ impl GPApplication {
         usb_row.add(&label);
         usb_row.set_action_name(Some("win.show_usb"));
         category_list.add(&usb_row);
-        let label = gtk::Label::new_with_mnemonic(Some("_PCI Autosuspend"));
+        let label = gtk::Label::with_mnemonic(Some("_PCI Autosuspend"));
         label.set_margin_top(6);
         label.set_margin_bottom(6);
         label.set_margin_start(18);
@@ -376,7 +376,7 @@ impl GPApplication {
         label_info.set_halign(gtk::Align::Start);
         label_main.set_halign(gtk::Align::Start);
         main_box.pack_start(&text_box, true, true, 0);
-        let cb_box = gtk::ComboBoxText::new_with_entry();
+        let cb_box = gtk::ComboBoxText::with_entry();
         let button = gtk::Switch::new();
         button.set_active(device.can_autosuspend());
         let id = device.get_id();
@@ -460,7 +460,7 @@ impl GPApplication {
         label_info.set_halign(gtk::Align::Start);
         label_main.set_halign(gtk::Align::Start);
         main_box.pack_start(&text_box, true, true, 0);
-        let cb_box = gtk::ComboBoxText::new_with_entry();
+        let cb_box = gtk::ComboBoxText::with_entry();
         let button = gtk::Switch::new();
         button.set_active(device.can_autosuspend());
         let id = device.get_id().to_owned();
