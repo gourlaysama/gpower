@@ -9,11 +9,49 @@ use glib::{clone, glib_object_subclass, glib_wrapper};
 use glib::{MainContext, Receiver, Sender};
 use gtk::prelude::*;
 use gtk::subclass::application::GtkApplicationImpl;
-use gtk_macros::*;
 use log::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
+
+macro_rules! get_widget {
+    ($name:ident, $wtype:ty, $builder:expr) => {
+        let $name: $wtype = $builder.get_object(stringify!($name)).expect(&format!(
+            "failed to get widget \"{}\": \"{}\"",
+            stringify!($name),
+            stringify!($wtype)
+        ));
+    };
+    ($name:ident, $wtype:ty, @$app:expr) => {
+        let $name: $wtype = $app
+            .builder
+            .borrow()
+            .as_ref()
+            .unwrap()
+            .get_object(stringify!($name))
+            .expect(&format!(
+                "failed to get widget \"{}\": \"{}\"",
+                stringify!($name),
+                stringify!($wtype)
+            ));
+    };
+}
+
+macro_rules! action {
+    ($actions_group:expr, $name:expr, $callback:expr) => {
+        let simple_action = gio::SimpleAction::new($name, None);
+        simple_action.connect_activate($callback);
+        $actions_group.add_action(&simple_action);
+    };
+}
+
+macro_rules! activate {
+    ($sender:expr, $action:expr) => {
+        if let Err(err) = $sender.send($action) {
+            error!("failed to run \"{}\" because {}", stringify!($action), err);
+        }
+    };
+}
 
 #[derive(Clone, Debug)]
 pub enum Action {
@@ -57,9 +95,9 @@ impl GPInnerApplication {
         trace!("marking state as changed");
 
         get_widget!(
-            self.builder.borrow().as_ref().unwrap(),
+            apply_button,
             gtk::Button,
-            apply_button
+            @self
         );
         let mut state = self.state.borrow_mut();
         apply_button.set_sensitive(state.errors == 0);
@@ -71,9 +109,9 @@ impl GPInnerApplication {
         self.populate_summary();
 
         get_widget!(
-            self.builder.borrow().as_ref().unwrap(),
+            apply_button,
             gtk::Button,
-            apply_button
+            @self
         );
         apply_button.set_sensitive(false);
         let mut state = self.state.borrow_mut();
@@ -83,14 +121,14 @@ impl GPInnerApplication {
 
     fn populate_summary(&self) {
         get_widget!(
-            self.builder.borrow().as_ref().unwrap(),
+            label_usb_summary,
             gtk::Label,
-            label_usb_summary
+            @self
         );
         get_widget!(
-            self.builder.borrow().as_ref().unwrap(),
+            label_pci_summary,
             gtk::Label,
-            label_pci_summary
+            @self
         );
 
         let state = &self.state.borrow();
@@ -224,7 +262,7 @@ impl GPApplication {
             gtk::STYLE_PROVIDER_PRIORITY_USER,
         );
         let builder = gtk::Builder::from_string(include_str!("../data/ui/window.ui"));
-        get_widget!(builder, gtk::ApplicationWindow, win);
+        get_widget!(win, gtk::ApplicationWindow, builder);
         win.set_application(Some(self));
 
         action!(
@@ -232,7 +270,7 @@ impl GPApplication {
             "refresh",
             clone!(@strong inner.sender as sender => move |_,_| {
                 debug!("refreshing the view");
-                send!(sender, Action::Refresh);
+                activate!(sender, Action::Refresh);
             })
         );
 
@@ -241,20 +279,20 @@ impl GPApplication {
             "apply_changes",
             clone!(@strong inner.sender as sender => move |_,_| {
                 debug!("applying changes");
-                send!(sender, Action::ApplyChanges);
+                activate!(sender, Action::ApplyChanges);
             })
         );
 
-        get_widget!(builder, gtk::Button, apply_button);
+        get_widget!(apply_button, gtk::Button, builder);
         apply_button.set_sensitive(false);
 
-        get_widget!(builder, gtk::AboutDialog, about_dialog);
+        get_widget!(about_dialog, gtk::AboutDialog, builder);
         action!(win, "about", move |_, _| {
             debug!("showing about dialog");
             about_dialog.show_all();
         });
 
-        get_widget!(builder, gtk::ListBox, category_list);
+        get_widget!(category_list, gtk::ListBox, builder);
         let label = gtk::Label::with_mnemonic(Some("_Summary"));
         label.set_margin_top(6);
         label.set_margin_bottom(6);
@@ -288,7 +326,7 @@ impl GPApplication {
             "show_summary",
             clone!(@strong inner.sender as sender, @strong category_list => move |_,_| {
                 debug!("showing summary pane");
-                send!(sender, Action::ShowPane("summary_pane".to_owned()));
+                activate!(sender, Action::ShowPane("summary_pane".to_owned()));
                 category_list.select_row(Some(&summary_row));
             })
         );
@@ -298,7 +336,7 @@ impl GPApplication {
             "show_usb",
             clone!(@strong inner.sender as sender, @strong category_list => move |_,_| {
                 debug!("showing usb pane");
-                send!(sender, Action::ShowPane("usb_pane".to_owned()));
+                activate!(sender, Action::ShowPane("usb_pane".to_owned()));
                 category_list.select_row(Some(&usb_row));
             })
         );
@@ -308,19 +346,19 @@ impl GPApplication {
             "show_pci",
             clone!(@strong inner.sender as sender, @strong category_list => move |_,_| {
                 debug!("showing pci pane");
-                send!(sender, Action::ShowPane("pci_pane".to_owned()));
+                activate!(sender, Action::ShowPane("pci_pane".to_owned()));
                 category_list.select_row(Some(&pci_row));
             })
         );
-        get_widget!(builder, gtk::ListBox, main_usb_list_box);
-        get_widget!(builder, gtk::ListBox, main_pci_list_box);
+        get_widget!(main_usb_list_box, gtk::ListBox, builder);
+        get_widget!(main_pci_list_box, gtk::ListBox, builder);
 
         self.fill_list(&main_usb_list_box, &main_pci_list_box);
 
-        get_widget!(builder, gtk::ScrolledWindow, usb_scroll);
+        get_widget!(usb_scroll, gtk::ScrolledWindow, builder);
         usb_scroll.add(&main_usb_list_box);
 
-        get_widget!(builder, gtk::ScrolledWindow, pci_scroll);
+        get_widget!(pci_scroll, gtk::ScrolledWindow, builder);
         pci_scroll.add(&main_pci_list_box);
 
         inner.builder.replace(Some(builder));
@@ -382,9 +420,9 @@ impl GPApplication {
         let id = device.get_id();
         button.connect_state_set(
             clone!(@strong app.sender as sender, @strong cb_box as cb, @strong self as app => move |_, on| {
-                send!(sender, Action::SetUsbAutoSuspend(id, on));
+                activate!(sender, Action::SetUsbAutoSuspend(id, on));
                 if on {
-                    send!(sender, Action::SetUsbAutoSuspendDelay(cb.clone(),
+                    activate!(sender, Action::SetUsbAutoSuspendDelay(cb.clone(),
                     id,
                     cb.get_active_text().map(|s| s.as_str().to_owned()).unwrap_or_else(String::new),
                 ));
@@ -417,7 +455,7 @@ impl GPApplication {
         cb_box.append_text("1 minute");
         cb_box.append_text("5 minutes");
         cb_box.connect_changed(clone!(@strong app.sender as sender => move |cb| {
-            send!(sender, Action::SetUsbAutoSuspendDelay(cb.clone(),
+            activate!(sender, Action::SetUsbAutoSuspendDelay(cb.clone(),
                 id,
                 cb.get_active_text().map(|s| s.as_str().to_owned()).unwrap_or_else(String::new),
             ));
@@ -466,9 +504,9 @@ impl GPApplication {
         let id = device.get_id().to_owned();
         button.connect_state_set(
             clone!(@strong app.sender as sender, @strong cb_box as cb, @strong self as app, @strong id => move |_, on| {
-                send!(sender, Action::SetPciAutoSuspend(id.clone(), on));
+                activate!(sender, Action::SetPciAutoSuspend(id.clone(), on));
                 if on {
-                    send!(sender, Action::SetPciAutoSuspendDelay(cb.clone(),
+                    activate!(sender, Action::SetPciAutoSuspendDelay(cb.clone(),
                     id.clone(),
                     cb.get_active_text().map(|s| s.as_str().to_owned()).unwrap_or_else(String::new),
                 ));
@@ -501,7 +539,7 @@ impl GPApplication {
         cb_box.append_text("1 minute");
         cb_box.append_text("5 minutes");
         cb_box.connect_changed(clone!(@strong app.sender as sender => move |cb| {
-            send!(sender, Action::SetPciAutoSuspendDelay(cb.clone(),
+            activate!(sender, Action::SetPciAutoSuspendDelay(cb.clone(),
                 id.clone(),
                 cb.get_active_text().map(|s| s.as_str().to_owned()).unwrap_or_else(String::new),
             ));
@@ -544,14 +582,14 @@ impl GPApplication {
 
         match action {
             Action::ApplyChanges => {
-                spawn!({
+                glib::MainContext::default().spawn_local({
                     let state = inner.state.clone();
                     let sender = inner.sender.clone();
                     async move {
                         match apply_changes(state).await {
                             Ok(()) => {
                                 info!("successfully applied changes");
-                                send!(sender, Action::ResetChanged);
+                                activate!(sender, Action::ResetChanged);
                             }
                             Err(e) => error!("error applying changes: {}", e),
                         }
@@ -561,9 +599,9 @@ impl GPApplication {
             Action::ResetChanged => inner.reset_changed(),
             Action::Refresh => {
                 get_widget!(
-                    inner.builder.borrow().as_ref().unwrap(),
+                    main_usb_list_box,
                     gtk::ListBox,
-                    main_usb_list_box
+                    @inner
                 );
                 main_usb_list_box.foreach(clone!(@weak main_usb_list_box => move |item| {
                     main_usb_list_box.remove(item);
@@ -578,9 +616,9 @@ impl GPApplication {
                 inner.state.borrow_mut().usb_devices = devices;
 
                 get_widget!(
-                    inner.builder.borrow().as_ref().unwrap(),
+                    main_pci_list_box,
                     gtk::ListBox,
-                    main_pci_list_box
+                    @inner
                 );
                 main_pci_list_box.foreach(clone!(@weak main_pci_list_box => move |item| {
                     main_pci_list_box.remove(item);
@@ -656,9 +694,9 @@ impl GPApplication {
             }
             Action::ShowPane(pane) => {
                 get_widget!(
-                    inner.builder.borrow().as_ref().unwrap(),
+                    main_stack,
                     gtk::Stack,
-                    main_stack
+                    @inner
                 );
                 main_stack.set_visible_child_name(&pane);
                 main_stack.show_all();

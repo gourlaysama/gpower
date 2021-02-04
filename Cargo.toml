@@ -12,7 +12,6 @@ gdk = "0.13"
 gio = { version = "0.9", features = ["v2_46"]}
 glib = "0.10"
 gtk = { version = "0.9", features = ["v3_22"] }
-gtk-macros = "0.2"
 humantime = "2"
 log = "0.4"
 nom = "6"
