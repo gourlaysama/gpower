@@ -38,7 +38,15 @@ $ sudo ninja -C build install
 #### License
 
 <sub>
-GPower Tweaks  is licensed under the <a href="COPYING">GPL General Public License v3.0 or later</a>.
+GPower Tweaks is licensed under the <a href="LICENSE">Apache License, Version 2.0</a>.
+</sub>
+
+<br>
+
+<sub>
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in GPower Tweaks by you, as defined in the Apache-2.0 license, shall be
+licensed as above, without any additional terms or conditions.
 </sub>
 
 [1]: https://www.rust-lang.org/tools/install
