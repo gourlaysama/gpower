@@ -7,7 +7,7 @@ Tweak linux power management settings
   - `pm_qos_no_power_off`
   - show connection type (hardwired/hotplug/...)
   - warn if child devices are not set to autosuspend anyway
-- [ ] PCI power management (autosuspend on/off, idle delay)
+- [x] PCI power management (autosuspend on/off, idle delay)
 - [ ] PCI wakeup support
 
 ![example screenshot](doc/readme_screenshot.png)
@@ -16,7 +16,7 @@ Tweak linux power management settings
 
 GPower Tweaks is build with meson and requires the following to build:
 
-- [Rust 1.42 or later][1]
+- [Rust 1.43 or later][1]
 - GTK 3.22 or later  (`gtk3-devel` on RHEL/Fedora, `libgtk-3-dev` on Debian/Ubuntu)
 - Meson build system
 

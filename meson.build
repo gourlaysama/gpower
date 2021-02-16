@@ -17,7 +17,7 @@ dependency('gio-2.0', version: '>= 2.46')
 dependency('gtk+-3.0', version: '>= 3.22')
 
 cargo = find_program('cargo')
-rustc = find_program('rustc', version: '>= 1.42')
+rustc = find_program('rustc', version: '>= 1.43')
 find_program('awk')
 find_program('find')
 find_program('tar')
@@ -27,7 +27,9 @@ rust_flags = run_command('printenv', 'RUSTFLAGS').stdout().strip()
 sources = files(
     'Cargo.toml',
     'Cargo.lock',
-    'src/usb/db.rs',
+    'src/db/mod.rs',
+    'src/db/parsers.rs',
+    'src/pci/mod.rs',
     'src/usb/mod.rs',
     'src/app.rs',
     'src/fs.rs',
