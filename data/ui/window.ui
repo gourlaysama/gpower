@@ -555,7 +555,7 @@
                     <property name="halign">start</property>
                     <property name="margin_left">12</property>
                     <property name="margin_top">6</property>
-                    <property name="label" translatable="yes">Suspended USB devices can decide to automatically wake themselves up on a condition.</property>
+                    <property name="label" translatable="yes">Suspended USB devices can decide to automatically wake themselves up when needed.</property>
                     <property name="wrap">True</property>
                   </object>
                   <packing>
@@ -574,7 +574,7 @@
                       <object class="GtkImage">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
-                        <property name="icon_name">dialog-warning-symbolic</property>
+                        <property name="icon_name">dialog-information-symbolic</property>
                         <property name="icon_size">3</property>
                       </object>
                       <packing>
@@ -588,8 +588,8 @@
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
                         <property name="halign">start</property>
-                        <property name="margin_left">6</property>
-                        <property name="label" translatable="yes">Keyboards and mouses may not be able to wakeup on their own (on keystroke or motion) after being put to sleep. Hardware support varies. Be careful not to disable your only means of input into your computer!</property>
+                        <property name="margin_left">0</property>
+                        <property name="label" translatable="yes">This includes input devices waking up on user activity, network devices waking themselves and the computer (Wake on LAN/WAN), or anything devices want to consider a wake up event. Device support varies.</property>
                         <property name="wrap">True</property>
                         <property name="max_width_chars">80</property>
                       </object>
