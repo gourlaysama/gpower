@@ -410,6 +410,7 @@ fn make_device(entry: std::fs::DirEntry, usb_db: Option<&Db>) -> Result<UsbDevic
     let subclass_path = char_path.join("bDeviceSubClass");
     let protocol_path = char_path.join("bDeviceProtocol");
     let control = char_path.join("power/control");
+    let wakeup = char_path.join("power/wakeup");
     let autosuspend_delay = char_path.join("power/autosuspend_delay_ms");
     let id = major as u32 | ((minor as u32) << 16);
     let mut usb_device = UsbDevice::from(&char_path, id);
@@ -498,6 +499,18 @@ fn make_device(entry: std::fs::DirEntry, usb_db: Option<&Db>) -> Result<UsbDevic
         -1 => usb_device.autosuspend = false,
         i => usb_device.delay = i as u64,
     }
+
+    let wakeup = match fs::read_to_string(&wakeup) {
+        Ok(s) => match s.trim() {
+            "enabled" => Some(true),
+            "disabled" => Some(false),
+            _ => None,
+        },
+        Err(_) => {
+            None
+        }
+    };
+    usb_device.allow_wakeup = wakeup;
 
     Ok(usb_device)
 }
