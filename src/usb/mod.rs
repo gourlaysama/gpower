@@ -18,6 +18,7 @@ pub struct UsbDevice {
     product_name: Option<String>,
     manufacturer_name: Option<String>,
     autosuspend: bool,
+    allow_wakeup: Option<bool>,
     delay: u64,
     kind: UsbKind,
 }
@@ -34,6 +35,7 @@ impl UsbDevice {
             product_name: None,
             manufacturer_name: None,
             autosuspend: false,
+            allow_wakeup: None,
             delay: 0,
             kind: UsbKind::default(),
         }
@@ -207,6 +209,22 @@ impl UsbDevice {
 
         write_string_privileged(&control_path, control_text).await?;
         write_string_privileged(&autosuspend_delay_path, autosuspend_delay_text).await?;
+
+        Ok(())
+    }
+
+    /// Get a reference to the usb device's allow wakeup.
+    pub fn allow_wakeup(&self) -> Option<bool> {
+        self.allow_wakeup
+    }
+
+    /// Set the usb device's allow wakeup.
+    pub fn set_allow_wakeup(&mut self, allow_wakeup: bool) -> Result<()> {
+        if self.allow_wakeup.is_none() {
+            anyhow!("device doesn't support remote wakeup");
+        }
+
+        self.allow_wakeup = Some(allow_wakeup);
 
         Ok(())
     }
