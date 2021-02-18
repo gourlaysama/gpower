@@ -60,6 +60,7 @@ pub enum Action {
     ResetChanged,
     SetUsbAutoSuspend(u32, bool),
     SetUsbAutoSuspendDelay(gtk::ComboBoxText, u32, String),
+    SetUsbAllowWakeup(u32, bool),
     SetPciAutoSuspend(String, bool),
     SetPciAutoSuspendDelay(gtk::ComboBoxText, String, String),
     ShowPane(String),
@@ -126,6 +127,11 @@ impl GPInnerApplication {
             @self
         );
         get_widget!(
+            label_usb_wakeup_summary,
+            gtk::Label,
+            @self
+        );
+        get_widget!(
             label_pci_summary,
             gtk::Label,
             @self
@@ -133,9 +139,13 @@ impl GPInnerApplication {
 
         let state = &self.state.borrow();
         let mut usb_suspendable_count = 0;
+        let mut usb_wakeup_enabled_count = 0;
         for d in &state.usb_devices {
             if d.can_autosuspend() {
                 usb_suspendable_count += 1;
+            }
+            if let Some(true) = d.allow_wakeup() {
+                usb_wakeup_enabled_count += 1;
             }
         }
         let mut pci_suspendable_count = 0;
@@ -148,6 +158,11 @@ impl GPInnerApplication {
         label_usb_summary.set_text(&format!(
             "{} / {}",
             usb_suspendable_count,
+            &state.usb_devices.len()
+        ));
+        label_usb_wakeup_summary.set_text(&format!(
+            "{} / {}",
+            usb_wakeup_enabled_count,
             &state.usb_devices.len()
         ));
         label_pci_summary.set_text(&format!(
@@ -311,6 +326,15 @@ impl GPApplication {
         usb_row.add(&label);
         usb_row.set_action_name(Some("win.show_usb"));
         category_list.add(&usb_row);
+        let label2 = gtk::Label::with_mnemonic(Some("_USB Remote Wakeup"));
+        label2.set_margin_top(6);
+        label2.set_margin_bottom(6);
+        label2.set_margin_start(18);
+        label2.set_halign(gtk::Align::Start);
+        let usb_wakeup_row = gtk::ListBoxRow::new();
+        usb_wakeup_row.add(&label2);
+        usb_wakeup_row.set_action_name(Some("win.show_usb_wakeup"));
+        category_list.add(&usb_wakeup_row);
         let label = gtk::Label::with_mnemonic(Some("_PCI Autosuspend"));
         label.set_margin_top(6);
         label.set_margin_bottom(6);
@@ -343,6 +367,16 @@ impl GPApplication {
 
         action!(
             win,
+            "show_usb_wakeup",
+            clone!(@strong inner.sender as sender, @strong category_list => move |_,_| {
+                debug!("showing usb wakeup pane");
+                activate!(sender, Action::ShowPane("usb_wakeup_pane".to_owned()));
+                category_list.select_row(Some(&usb_wakeup_row));
+            })
+        );
+
+        action!(
+            win,
             "show_pci",
             clone!(@strong inner.sender as sender, @strong category_list => move |_,_| {
                 debug!("showing pci pane");
@@ -351,12 +385,20 @@ impl GPApplication {
             })
         );
         get_widget!(main_usb_list_box, gtk::ListBox, builder);
+        get_widget!(main_usb_wakeup_list_box, gtk::ListBox, builder);
         get_widget!(main_pci_list_box, gtk::ListBox, builder);
 
-        self.fill_list(&main_usb_list_box, &main_pci_list_box);
+        self.fill_list(
+            &main_usb_list_box,
+            &main_usb_wakeup_list_box,
+            &main_pci_list_box,
+        );
 
         get_widget!(usb_scroll, gtk::ScrolledWindow, builder);
         usb_scroll.add(&main_usb_list_box);
+
+        get_widget!(usb_wakeup_scroll, gtk::ScrolledWindow, builder);
+        usb_wakeup_scroll.add(&main_usb_wakeup_list_box);
 
         get_widget!(pci_scroll, gtk::ScrolledWindow, builder);
         pci_scroll.add(&main_pci_list_box);
@@ -368,7 +410,12 @@ impl GPApplication {
         win
     }
 
-    fn fill_list(&self, main_usb_list_box: &gtk::ListBox, main_pci_list_box: &gtk::ListBox) {
+    fn fill_list(
+        &self,
+        main_usb_list_box: &gtk::ListBox,
+        main_usb_wakeup_list_box: &gtk::ListBox,
+        main_pci_list_box: &gtk::ListBox,
+    ) {
         let inner = GPInnerApplication::from_instance(self);
 
         let mut entries = Vec::new();
@@ -380,6 +427,14 @@ impl GPApplication {
         }
 
         let mut entries = Vec::new();
+        for d in inner.state.borrow().usb_devices.iter() {
+            entries.push(self.build_usb_wakeup_entry(&d, inner));
+        }
+        for e in entries {
+            main_usb_wakeup_list_box.add(&e);
+        }
+
+        let mut entries = Vec::new();
         for d in inner.state.borrow().pci_devices.iter() {
             entries.push(self.build_pci_entry(&d, inner));
         }
@@ -388,10 +443,7 @@ impl GPApplication {
         }
     }
 
-    fn build_usb_entry(&self, device: &UsbDevice, app: &GPInnerApplication) -> gtk::ListBoxRow {
-        let row = gtk::ListBoxRow::new();
-        row.set_can_focus(false);
-        let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    fn make_usb_description(&self, device: &UsbDevice) -> gtk::Box {
         let text_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let desc_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         let label_main = gtk::Label::new(Some(&device.get_name()));
@@ -413,6 +465,16 @@ impl GPApplication {
         text_box.set_spacing(3);
         label_info.set_halign(gtk::Align::Start);
         label_main.set_halign(gtk::Align::Start);
+
+        text_box
+    }
+
+    fn build_usb_entry(&self, device: &UsbDevice, app: &GPInnerApplication) -> gtk::ListBoxRow {
+        let row = gtk::ListBoxRow::new();
+        row.set_can_focus(false);
+        let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        let text_box = self.make_usb_description(device);
+
         main_box.pack_start(&text_box, true, true, 0);
         let cb_box = gtk::ComboBoxText::with_entry();
         let button = gtk::Switch::new();
@@ -469,6 +531,34 @@ impl GPApplication {
                     | glib::BindingFlags::BIDIRECTIONAL,
             )
             .build();
+        row.add(&main_box);
+        row
+    }
+
+    fn build_usb_wakeup_entry(
+        &self,
+        device: &UsbDevice,
+        app: &GPInnerApplication,
+    ) -> gtk::ListBoxRow {
+        let row = gtk::ListBoxRow::new();
+        row.set_can_focus(false);
+        let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        let text_box = self.make_usb_description(device);
+
+        let button = gtk::Switch::new();
+        button.set_sensitive(device.allow_wakeup().is_some());
+        button.set_active(device.allow_wakeup().unwrap_or(false));
+        let id = device.get_id();
+        button.connect_state_set(clone!(@strong app.sender as sender => move |_, on| {
+            activate!(sender, Action::SetUsbAllowWakeup(id, on));
+            glib::signal::Inhibit(false)
+        }
+        ));
+        button.set_valign(gtk::Align::Center);
+
+        main_box.pack_start(&text_box, true, true, 0);
+        main_box.add(&button);
+
         row.add(&main_box);
         row
     }
@@ -606,6 +696,16 @@ impl GPApplication {
                 main_usb_list_box.foreach(clone!(@weak main_usb_list_box => move |item| {
                     main_usb_list_box.remove(item);
                 }));
+                get_widget!(
+                    main_usb_wakeup_list_box,
+                    gtk::ListBox,
+                    @inner
+                );
+                main_usb_wakeup_list_box.foreach(
+                    clone!(@weak main_usb_wakeup_list_box => move |item| {
+                        main_usb_wakeup_list_box.remove(item);
+                    }),
+                );
                 let devices = match usb::list_devices() {
                     Ok(d) => d,
                     Err(e) => {
@@ -632,8 +732,13 @@ impl GPApplication {
                 };
                 inner.state.borrow_mut().pci_devices = devices;
 
-                self.fill_list(&main_usb_list_box, &main_pci_list_box);
+                self.fill_list(
+                    &main_usb_list_box,
+                    &main_usb_wakeup_list_box,
+                    &main_pci_list_box,
+                );
                 main_usb_list_box.show_all();
+                main_usb_wakeup_list_box.show_all();
                 main_pci_list_box.show_all();
 
                 inner.reset_changed();
@@ -660,6 +765,17 @@ impl GPApplication {
                     }
                     Err(e) => {
                         self.set_error(&source, Some(&format!("{}", e)));
+                    }
+                }
+
+                inner.set_changed();
+            }
+            Action::SetUsbAllowWakeup(id, allow_wakeup) => {
+                for d in inner.state.borrow_mut().usb_devices.iter_mut() {
+                    if d.get_id() == id {
+                        if let Err(e) = d.set_allow_wakeup(allow_wakeup) {
+                            warn!("ignoring error: {}", e);
+                        }
                     }
                 }
 
