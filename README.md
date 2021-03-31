@@ -19,7 +19,7 @@ Tweak linux power management settings
 
 GPower Tweaks is build with meson and requires the following to build:
 
-- [Rust 1.43 or later][1]
+- [Rust 1.51 or later][1]
 - GTK 3.22 or later  (`gtk3-devel` on RHEL/Fedora, `libgtk-3-dev` on Debian/Ubuntu)
 - Meson build system
 

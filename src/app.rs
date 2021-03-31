@@ -66,7 +66,7 @@ pub enum Action {
     ShowPane(String),
 }
 
-pub struct GPInnerApplication {
+pub struct GpInnerApplication {
     sender: Sender<Action>,
     receiver: RefCell<Option<Receiver<Action>>>,
     state: Rc<RefCell<State>>,
@@ -91,7 +91,7 @@ impl State {
     }
 }
 
-impl GPInnerApplication {
+impl GpInnerApplication {
     fn set_changed(&self) {
         trace!("marking state as changed");
 
@@ -173,7 +173,7 @@ impl GPInnerApplication {
     }
 }
 
-impl ObjectSubclass for GPInnerApplication {
+impl ObjectSubclass for GpInnerApplication {
     const NAME: &'static str = "GPInnerApplication";
     type ParentType = gtk::Application;
     type Instance = subclass::simple::InstanceStruct<Self>;
@@ -210,13 +210,13 @@ impl ObjectSubclass for GPInnerApplication {
     }
 }
 
-impl ObjectImpl for GPInnerApplication {
+impl ObjectImpl for GpInnerApplication {
     glib::glib_object_impl!();
 }
 
-impl GtkApplicationImpl for GPInnerApplication {}
+impl GtkApplicationImpl for GpInnerApplication {}
 
-impl ApplicationImpl for GPInnerApplication {
+impl ApplicationImpl for GpInnerApplication {
     fn activate(&self, _: &gio::Application) {
         debug!("activating GPInnerApplication");
         let outer_app = ObjectSubclass::get_instance(self)
@@ -236,13 +236,13 @@ impl ApplicationImpl for GPInnerApplication {
 
 glib_wrapper! {
     pub struct GPApplication(
-        Object<subclass::simple::InstanceStruct<GPInnerApplication>,
-        subclass::simple::ClassStruct<GPInnerApplication>,
+        Object<subclass::simple::InstanceStruct<GpInnerApplication>,
+        subclass::simple::ClassStruct<GpInnerApplication>,
         GPApplicationClass>
     ) @extends gio::Application, gtk::Application;
 
     match fn {
-        get_type => || GPInnerApplication::get_type().to_glib(),
+        get_type => || GpInnerApplication::get_type().to_glib(),
     }
 }
 
@@ -265,7 +265,7 @@ impl GPApplication {
 
     fn create_window(&self) -> gtk::ApplicationWindow {
         debug!("creating main window");
-        let inner = GPInnerApplication::from_instance(self);
+        let inner = GpInnerApplication::from_instance(self);
 
         let provider = gtk::CssProvider::new();
         provider
@@ -416,7 +416,7 @@ impl GPApplication {
         main_usb_wakeup_list_box: &gtk::ListBox,
         main_pci_list_box: &gtk::ListBox,
     ) {
-        let inner = GPInnerApplication::from_instance(self);
+        let inner = GpInnerApplication::from_instance(self);
 
         let mut entries = Vec::new();
         for d in inner.state.borrow().usb_devices.iter() {
@@ -469,7 +469,7 @@ impl GPApplication {
         text_box
     }
 
-    fn build_usb_entry(&self, device: &UsbDevice, app: &GPInnerApplication) -> gtk::ListBoxRow {
+    fn build_usb_entry(&self, device: &UsbDevice, app: &GpInnerApplication) -> gtk::ListBoxRow {
         let row = gtk::ListBoxRow::new();
         row.set_can_focus(false);
         let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
@@ -538,7 +538,7 @@ impl GPApplication {
     fn build_usb_wakeup_entry(
         &self,
         device: &UsbDevice,
-        app: &GPInnerApplication,
+        app: &GpInnerApplication,
     ) -> gtk::ListBoxRow {
         let row = gtk::ListBoxRow::new();
         row.set_can_focus(false);
@@ -563,7 +563,7 @@ impl GPApplication {
         row
     }
 
-    fn build_pci_entry(&self, device: &PciDevice, app: &GPInnerApplication) -> gtk::ListBoxRow {
+    fn build_pci_entry(&self, device: &PciDevice, app: &GpInnerApplication) -> gtk::ListBoxRow {
         let row = gtk::ListBoxRow::new();
         row.set_can_focus(false);
         let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
@@ -650,7 +650,7 @@ impl GPApplication {
     fn set_error(&self, cb: &gtk::ComboBoxText, error: Option<&str>) {
         debug!("setting error state to '{}'", error.is_some());
 
-        let inner = GPInnerApplication::from_instance(self);
+        let inner = GpInnerApplication::from_instance(self);
         let context = cb.get_child().unwrap().get_style_context();
 
         if !context.has_class("error") && error.is_some() {
@@ -668,7 +668,7 @@ impl GPApplication {
     fn process_action(&self, action: Action) -> glib::Continue {
         trace!("processing action: {:?}", action);
 
-        let inner = GPInnerApplication::from_instance(self);
+        let inner = GpInnerApplication::from_instance(self);
 
         match action {
             Action::ApplyChanges => {
