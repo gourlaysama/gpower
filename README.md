@@ -1,4 +1,7 @@
 # GPower Tweaks
+
+**WARNING**: this is very experimental! Use at your own risks. There are a lot of things missing or not cleanly implemented. This is more of an exploration of GUIs in Rust with gtk-rs, really.
+
 Tweak linux power management settings
 
 - [x] Change USB autosuspend settings (on/off and idle delay)
